@@ -2,11 +2,15 @@
 #define DENSITYVIEWER_H
 
 #include <QWidget>
-
+#include <QMouseEvent>
+using namespace std;
 
 namespace Ui {
 class DensityViewer;
 }
+
+enum class Colormap {blackToRed};
+enum class ColormapInterpolation {nearest, linear};
 
 class DensityViewer : public QWidget
 {
@@ -17,11 +21,26 @@ public:
     ~DensityViewer();
     QSize sizeHint() const;
 
-public slots:
+    void changeZoom(double factor);
+    void pan(double dx,double dy);
 
+    vector<double> pix2hkl(double, double);
+
+
+public slots:
+    void setColorSaturation(double);
+
+signals:
+    void dataCursorMoved(int x, int y, vector<double> hkl);
 
 private:
     Ui::DensityViewer *ui;
+    double zoom;
+    double x_pos, y_pos;
+    double colorSaturation;
+    void initSpecifics();
+
+    void mouseMoveEvent(QMouseEvent * event) Q_DECL_OVERRIDE;
 
 protected:
     void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE;

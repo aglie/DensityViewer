@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <densityviewer.h>
+#include <QLabel>
 
 namespace Ui {
 class DensityViewerWindow;
@@ -18,6 +19,7 @@ public:
 
 private:
     Ui::DensityViewerWindow *ui;
+    QLabel * coordinateCursor;
 };
 
 #endif // DENSITYVIEWERWINDOW_H
