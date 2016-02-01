@@ -3,6 +3,8 @@
 
 #include <QWidget>
 #include <QMouseEvent>
+#include "densitydata.h"
+
 using namespace std;
 
 namespace Ui {
@@ -26,9 +28,14 @@ public:
 
     vector<double> pix2hkl(double, double);
 
+    DensityData data;
+
 
 public slots:
     void setColorSaturation(double);
+    void setSectionIndex(int);
+    void setSectionDirection(QString);
+    void setGrid(bool);
 
 signals:
     void dataCursorMoved(int x, int y, vector<double> hkl);
@@ -38,7 +45,11 @@ private:
     double zoom;
     double x_pos, y_pos;
     double colorSaturation;
+    int sectionIndex; //position in hkx like things
     void initSpecifics();
+    QString currentSectionDirection;
+    QTransform imageTransform();
+    bool showGrid;
 
     void mouseMoveEvent(QMouseEvent * event) Q_DECL_OVERRIDE;
 

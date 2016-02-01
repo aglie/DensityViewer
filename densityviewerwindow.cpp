@@ -8,6 +8,8 @@
 #include <QTextEdit>
 #include <sstream>
 #include <QSpinBox>
+#include <QComboBox>
+#include <QCheckBox>
 
 QString hkl2str(vector<double> hkl) {
     ostringstream res;
@@ -64,6 +66,34 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     connect(colorSaturation, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), [=](int val) {densityViewer->setColorSaturation(val);});
     controllerBar->addWidget(colorSaturation);
 
+
+    controllerBar->addWidget(new QLabel("X="));
+    auto sectionIndex = new QSpinBox;
+    sectionIndex->setMaximum(densityViewer->data.size[2]);
+    sectionIndex->setSingleStep(1);
+    sectionIndex->setValue(0);
+
+    connect(sectionIndex, SIGNAL(valueChanged(int)),densityViewer, SLOT(setSectionIndex(int)));
+
+    controllerBar->addWidget(sectionIndex);
+
+    auto sectionComboBox = new QComboBox;
+    sectionComboBox->addItem(tr("hkx"));
+    sectionComboBox->addItem(tr("hxl"));
+    sectionComboBox->addItem(tr("xkl"));
+
+    connect(sectionComboBox,
+            static_cast<void (QComboBox::*)(const QString &)>(&QComboBox::activated),
+            [=](QString sec){densityViewer->setSectionDirection( sec );});
+
+    controllerBar->addWidget(sectionComboBox);
+
+    auto gridOn = new QCheckBox("grid");
+
+    gridOn->setChecked(true);
+    connect(gridOn,SIGNAL(clicked(bool)),densityViewer,SLOT(setGrid(bool)));
+
+    controllerBar->addWidget(gridOn);
 
     controllerBar->addStretch();
 

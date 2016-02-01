@@ -5,11 +5,15 @@
 #include <QImage>
 #include <QPainter>
 #include <QPen>
-#include <random>
+#include <math.h>
 #include <QTransform>
 #include <assert.h>
+#include <math.h>
+#include <algorithm>
+#include <QLineF>
 
-double fractional(double x) {
+double fractional(double x)
+{
     double intpart;
     auto fractpart = modf (x , &intpart);
     return fractpart;
@@ -55,6 +59,10 @@ void DensityViewer::initSpecifics() {
     x_pos = 0;
     y_pos = 0;
     colorSaturation = 1;
+    data = DensityData();
+    sectionIndex=0;
+    currentSectionDirection = "hkx";
+    showGrid=true;
 }
 
 DensityViewer::DensityViewer(QWidget *parent) :
@@ -71,35 +79,134 @@ DensityViewer::~DensityViewer()
     delete ui;
 }
 
+QTransform DensityViewer::imageTransform() {
+    QTransform tran;
+    tran.translate(x_pos,y_pos);
+    tran.scale(zoom,zoom);
+    tran*=QTransform(1,0,1./2,sqrt(3.)/2,0,0);
+    return tran;
+}
+
+vector<double> makeTicks(double llvis, double ulvis, double lldset, double uldset, double minStepSize, double pixStepSize) {
+    //Decide on pixel size
+    double stepSize;
+    vector<double> sensibleStepSizes = {0.0001,0.0002,0.0005,0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.125,0.2,0.25,0.5,1,2,5,10,15,20,25,50,100,200,500,1000,2000,5000};
+    if(minStepSize<=pixStepSize)
+        stepSize = pixStepSize;
+    else if(minStepSize<= 2*pixStepSize)
+        stepSize = 2*pixStepSize;
+    else {
+        stepSize=sensibleStepSizes[0];
+        for(auto sz : sensibleStepSizes)
+            if(sz<=minStepSize)
+                stepSize=sz;
+            else
+                break;
+    }
+
+
+    //Generate equally spaced list of ticks
+
+    auto ll = max(llvis,lldset);
+    auto ul = min(ulvis,uldset);
+    double lowerTick = ceil(ll/stepSize)*stepSize;
+
+    vector<double> res;
+    for(auto tick=lowerTick; tick<=ul; tick+=stepSize)
+        res.push_back(tick);
+
+    //TODO: get the lldset and uldset to the list of ticks, possibly kicking out some of the ticks near them
+    return res;
+}
+
 void DensityViewer::paintEvent(QPaintEvent * /* event */)
 {
     QPainter painter(this);
 
-    int sz=100;
-    QImage image(sz, sz, QImage::Format_RGB32);
+    DensitySection section = data.extractSection(currentSectionDirection,sectionIndex);
+    QImage image(section.size[0], section.size[1], QImage::Format_RGB32);
 
-    for(int i=0; i<sz; ++i)
-        for(int j=0; j<sz; ++j) {
-            int v = rand() % 255;
+    for(int i=0; i<section.size[0]; ++i)
+        for(int j=0; j<section.size[1]; ++j) {
+            int v = section.at(i,j);
             image.setPixel(i, j, falseColor(v,Colormap::blackToRed,{-colorSaturation,colorSaturation},ColormapInterpolation::linear));
         }
 
-    painter.setWorldTransform(QTransform(1,0,1./2,sqrt(3.)/2,0,0),true);
-    painter.translate(x_pos,y_pos);
-    painter.scale(zoom,zoom);
-
-
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    auto imTransform=imageTransform();
+    painter.setWorldTransform(imageTransform());
     painter.drawImage(0,0,image);
+
+    // The axes start
+    auto margin = 50;
+    auto sz = size();
+
+    //auto pen = QPen(Qt::blue, 2, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin);
+
+    //    //painter.setBrush(brush);
+
+    QRect visibleArea(margin, 0, sz.width(), sz.height()-margin);
+    //figure out the x coordinates of the visible area rectangle
+    QPolygon visibleAreaImCoord = imTransform.inverted().map(QPolygon(visibleArea));
+    vector<double> xPoints, yPoints;
+    for(int i=0; i<visibleAreaImCoord.size(); ++i) {
+        xPoints.push_back(visibleAreaImCoord.point(i).x());
+        yPoints.push_back(visibleAreaImCoord.point(i).y());
+    }
+
+    painter.setWorldTransform(QTransform());
+
+    auto gridTransform=imTransform;
+    gridTransform.translate(0.5,0.5);
+
+
+    auto xticks = makeTicks(*min_element(begin(xPoints),end(xPoints))/100, *max_element(begin(xPoints),end(xPoints))/100, 0, 1, 1./zoom, 1./100);
+    auto yticks = makeTicks(*min_element(begin(yPoints),end(yPoints))/100, *max_element(begin(yPoints),end(yPoints))/100, 0, 1, 1./zoom, 1./100);
+
+    vector<QLineF> xTickLines(xticks.size());
+    transform(begin(xticks),end(xticks),begin(xTickLines),[&](double xtick){return QLineF(gridTransform.map(QPointF(xtick*99,-1000)),
+                                                                                    gridTransform.map(QPointF(xtick*99, 1000)));});
+    vector<QLineF> yTickLines(yticks.size());
+    transform(begin(yticks),end(yticks),begin(yTickLines),[&](double ytick){return QLineF(gridTransform.map(QPointF(-1000,ytick*99)),
+                                                                                    gridTransform.map(QPointF( 1000,ytick*99)));});
+
+
+    if(showGrid) {
+        painter.setPen(QPen(Qt::blue,2, Qt::DotLine));
+        for (auto xtick : xticks) {
+            painter.drawLine(gridTransform.map(QPoint(xtick*99,-1000)),
+                             gridTransform.map(QPoint(xtick*99, 1000)));
+        }
+        for (auto ytick : yticks) {
+            painter.drawLine(gridTransform.map(QPoint(-1000,ytick*99)),
+                             gridTransform.map(QPoint( 1000,ytick*99)));
+        }
+    }
+
+    // Figure out the positions
+    //QLine().int
+
+
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QBrush(Qt::white));
+
+    painter.drawRect(QRect(0, 0, margin, sz.height()));
+    painter.drawRect(QRect(0, sz.height()-margin, sz.width(), sz.height()));
+
+    painter.setPen(QPen(Qt::black,2, Qt::SolidLine));
+    if(false) {
+        painter.drawLine(margin,0,margin,sz.height()-margin);
+        painter.drawLine(margin,sz.height()-margin,sz.width(),sz.height()-margin);
+    } else {
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(margin,1,sz.width()-margin-1,sz.height()-margin);
+    }
+
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-//    auto pen = QPen(Qt::blue, 2, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin);
 
-//    painter.setPen(pen);
 
-//    //painter.setBrush(brush);
-//    painter.setRenderHint(QPainter::Antialiasing, true);
 
-//    QRect rect(10, 20, 80, 60);
 //    painter.drawLine(rect.bottomLeft(), rect.topRight());
 //    QPixmap img(100,100);
 //    img.se
@@ -122,10 +229,7 @@ void DensityViewer::pan(double dx,double dy) {
 }
 
 vector<double> DensityViewer::pix2hkl(double x_screen, double y_screen) {
-    QTransform tran;
-    tran.translate(x_pos,y_pos);
-    tran.scale(zoom,zoom);
-    tran*=QTransform(1,0,1./2,sqrt(3.)/2,0,0);
+    auto tran = imageTransform();
 
     auto res = tran.inverted().map(QPoint(x_screen,y_screen));
     return vector<double> {double(res.x()),double(res.y())};
@@ -138,5 +242,20 @@ void DensityViewer::mouseMoveEvent(QMouseEvent * event) {
 
 void DensityViewer::setColorSaturation(double inp) {
     colorSaturation=inp;
+    update();
+}
+
+void DensityViewer::setSectionIndex(int inp) {
+    sectionIndex=inp;
+    update();
+}
+
+void DensityViewer::setSectionDirection(QString inp) {
+    currentSectionDirection = inp;
+    update();
+}
+
+void DensityViewer::setGrid(bool inp) {
+    showGrid=inp;
     update();
 }
