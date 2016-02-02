@@ -1,5 +1,4 @@
 #include "densityviewer.h"
-#include "ui_densityviewer.h"
 
 #include <QPixmap>
 #include <QImage>
@@ -22,7 +21,11 @@ double fractional(double x)
 
 QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterpolation interpolation) {
     assert(clims[0]<=clims[1]);
+    if(isnan(data))
+        data=0;
+
     double trimmedData = (data-clims[0])/(clims[1]-clims[0]);
+
     trimmedData = min(1.,trimmedData);
     trimmedData = max(0.,trimmedData);
 
@@ -56,10 +59,10 @@ QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterp
 }
 
 void DensityViewer::initSpecifics() {
-    zoom = 10;
+    zoom = 1;
     x_pos = 0;
     y_pos = 0;
-    colorSaturation = 1;
+    colorSaturation = 255;
     data = DensityData();
     sectionIndex=0;
     currentSectionDirection = "hkx";
@@ -67,17 +70,16 @@ void DensityViewer::initSpecifics() {
 }
 
 DensityViewer::DensityViewer(QWidget *parent) :
-    QWidget(parent),
-    ui(new Ui::DensityViewer)
+    QWidget(parent)
 {
     initSpecifics();
     setMouseTracking(true);
-    ui->setupUi(this);
+    //ui->setupUi(this);
 }
 
 DensityViewer::~DensityViewer()
 {
-    delete ui;
+    //delete ui;
 }
 
 QTransform DensityViewer::imageTransform() {
@@ -179,7 +181,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
 
     for(int i=0; i<section.size[0]; ++i)
         for(int j=0; j<section.size[1]; ++j) {
-            int v = section.at(i,j);
+            auto v = section.at(i,j);
             image.setPixel(i, j, falseColor(v,Colormap::blackToRed,{-colorSaturation,colorSaturation},ColormapInterpolation::linear));
         }
 

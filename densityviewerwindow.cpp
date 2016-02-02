@@ -1,5 +1,4 @@
 #include "densityviewerwindow.h"
-#include "ui_densityviewerwindow.h"
 
 #include "densityviewer.h"
 #include <QHBoxLayout>
@@ -18,10 +17,9 @@ QString hkl2str(vector<double> hkl) {
 }
 
 DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
-    QMainWindow(parent),
-    ui(new Ui::DensityViewerWindow)
+    QMainWindow(parent)
 {
-    ui->setupUi(this);
+    //ui->setupUi(this);
 
     QHBoxLayout *mainLayout = new QHBoxLayout;
     auto densityViewer = new DensityViewer;
@@ -120,7 +118,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
 DensityViewerWindow::~DensityViewerWindow()
 {
-    delete ui;
+    //delete ui;
 }
 
 

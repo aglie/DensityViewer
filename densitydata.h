@@ -4,6 +4,9 @@
 #import <vector>
 #import <QString>
 
+#include "H5Cpp.h"
+using namespace H5;
+
 using namespace std;
 
 class DensitySection {
@@ -15,6 +18,8 @@ public:
     vector<double> size;
     vector<double> data;
     double at(int x, int y) {return data[x*size[0]+y];}
+
+
 };
 
 class DensityData
@@ -24,7 +29,10 @@ public:
     vector<double> data;
     vector<double> size;
     DensitySection extractSection(QString section,int x);
-    double at(int x,int y,int z) {return data[(x*size[0]+y)*size[1]+z];}
+    double at(int x, int y, int z) {return data[(x*size[0]+y)*size[1]+z];}
+private:
+    void loadFromHDF5();
+    H5File dataFile;
 };
 
 #endif // DENSITYDATA_H
