@@ -11,6 +11,7 @@
 #include <math.h>
 #include <algorithm>
 #include <QLineF>
+#include <sstream>
 
 double fractional(double x)
 {
@@ -119,6 +120,56 @@ vector<double> makeTicks(double llvis, double ulvis, double lldset, double uldse
     return res;
 }
 
+void drawTickLables(QLineF & guideLine, vector<double> &xticks, vector<QLineF> &xTickLines, QPainter & painter, string alignment) {
+    auto xtick = begin(xticks);
+    auto xTickLine = begin(xTickLines);
+    for(;xtick != end(xticks); ++xTickLine, ++xtick) {
+        QPointF drawPoint;
+        guideLine.intersect(*xTickLine,&drawPoint);
+
+        ostringstream res;
+        res << *xtick;
+        auto formatted = QString::fromStdString(res.str());
+        double textMaxLen=50;
+        double textHeight=14;
+        // Interesting question of corse is how to properly align axis titles over rotating axes
+        // At the moment I left-middle and bottom
+        if(alignment=="top-middle")
+            painter.drawText(drawPoint.x()-textMaxLen/2,
+                             drawPoint.y(),
+                             textMaxLen,
+                             textHeight,
+                             Qt::AlignHCenter | Qt::AlignTop,
+                             formatted);
+        else if(alignment=="middle-left")
+            painter.drawText(drawPoint.x()-textMaxLen,
+                             drawPoint.y()-textHeight/2,
+                             textMaxLen,
+                             textHeight,
+                             Qt::AlignRight | Qt::AlignVCenter,
+                             formatted);
+        else
+            assert(false);
+    }
+}
+
+void drawTicks(QLineF & tickBaseline, vector<QLineF> & gridLines,QPainter & painter) {
+    painter.setPen(QPen(Qt::black,2, Qt::SolidLine));
+    double tickLength=5;
+
+    for(auto gline : gridLines) {
+        QPointF intersection;
+        auto itype = tickBaseline.intersect(gline, &intersection);
+        if(itype == QLineF::BoundedIntersection) {
+            auto t = gline.unitVector();
+            painter.drawLine(intersection.x(),
+                             intersection.y(),
+                             intersection.x()+(t.p2().x()-t.p1().x())*tickLength,
+                             intersection.y()+(t.p2().y()-t.p1().y())*tickLength);
+        }
+    }
+}
+
 void DensityViewer::paintEvent(QPaintEvent * /* event */)
 {
     QPainter painter(this);
@@ -164,8 +215,8 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
     auto yticks = makeTicks(*min_element(begin(yPoints),end(yPoints))/100, *max_element(begin(yPoints),end(yPoints))/100, 0, 1, 1./zoom, 1./100);
 
     vector<QLineF> xTickLines(xticks.size());
-    transform(begin(xticks),end(xticks),begin(xTickLines),[&](double xtick){return QLineF(gridTransform.map(QPointF(xtick*99,-1000)),
-                                                                                    gridTransform.map(QPointF(xtick*99, 1000)));});
+    transform(begin(xticks),end(xticks),begin(xTickLines),[&](double xtick){return QLineF(gridTransform.map(QPointF(xtick*99, 1000)),
+                                                                                          gridTransform.map(QPointF(xtick*99,-1000)));});
     vector<QLineF> yTickLines(yticks.size());
     transform(begin(yticks),end(yticks),begin(yTickLines),[&](double ytick){return QLineF(gridTransform.map(QPointF(-1000,ytick*99)),
                                                                                     gridTransform.map(QPointF( 1000,ytick*99)));});
@@ -173,25 +224,38 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
 
     if(showGrid) {
         painter.setPen(QPen(Qt::blue,2, Qt::DotLine));
-        for (auto xtick : xticks) {
-            painter.drawLine(gridTransform.map(QPoint(xtick*99,-1000)),
-                             gridTransform.map(QPoint(xtick*99, 1000)));
+        for (auto line : xTickLines) {
+            painter.drawLine(line);
         }
-        for (auto ytick : yticks) {
-            painter.drawLine(gridTransform.map(QPoint(-1000,ytick*99)),
-                             gridTransform.map(QPoint( 1000,ytick*99)));
+        for (auto line : yTickLines) {
+            painter.drawLine(line);
         }
     }
-
-    // Figure out the positions
-    //QLine().int
-
 
     painter.setPen(Qt::NoPen);
     painter.setBrush(QBrush(Qt::white));
 
     painter.drawRect(QRect(0, 0, margin, sz.height()));
     painter.drawRect(QRect(0, sz.height()-margin, sz.width(), sz.height()));
+
+    // Figure out the positions and draw the tick labels
+    painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+
+    double tickMargin = 5;
+    auto lowerImageBorder = QLineF(margin,sz.height()-margin,sz.width(),sz.height()-margin);
+    auto xTickGuideline = lowerImageBorder;
+    xTickGuideline.translate(0,tickMargin);
+
+    auto leftImageBorder = QLineF(margin,0,margin,sz.height()-margin);
+    auto yTickGuideline = leftImageBorder;
+    yTickGuideline.translate(-tickMargin,0);
+
+    drawTickLables(xTickGuideline, xticks, xTickLines, painter, "top-middle");
+    drawTickLables(yTickGuideline, yticks, yTickLines, painter, "middle-left");
+
+    drawTicks(lowerImageBorder,xTickLines,painter);
+    drawTicks(leftImageBorder ,yTickLines,painter);
+
 
     painter.setPen(QPen(Qt::black,2, Qt::SolidLine));
     if(false) {
