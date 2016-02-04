@@ -176,12 +176,12 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
 {
     QPainter painter(this);
 
-    DensitySection section = data.extractSection(currentSectionDirection,sectionIndex);
-    QImage image(section.size[0], section.size[1], QImage::Format_RGB32);
+    currentSection = data.extractSection(currentSectionDirection,sectionIndex);
+    QImage image(currentSection.size[0], currentSection.size[1], QImage::Format_RGB32);
 
-    for(int i=0; i<section.size[0]; ++i)
-        for(int j=0; j<section.size[1]; ++j) {
-            auto v = section.at(i,j);
+    for(int i=0; i<currentSection.size[0]; ++i)
+        for(int j=0; j<currentSection.size[1]; ++j) {
+            auto v = currentSection.at(i,j);
             image.setPixel(i, j, falseColor(v,Colormap::blackToRed,{-colorSaturation,colorSaturation},ColormapInterpolation::linear));
         }
 
@@ -207,18 +207,28 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
         yPoints.push_back(visibleAreaImCoord.point(i).y());
     }
 
+    // xPoints = [currentSection.transformAxis(0,x)]
+    // yPoints = [currentSection.transformAxis(1,y)]
+
     painter.setWorldTransform(QTransform());
 
     auto gridTransform=imTransform;
     gridTransform.translate(0.5,0.5);
 
 
-    auto xticks = makeTicks(*min_element(begin(xPoints),end(xPoints))/100, *max_element(begin(xPoints),end(xPoints))/100, 0, 1, 1./zoom, 1./100);
+    auto xticks = makeTicks(*min_element(begin(xPoints),end(xPoints))/100, //max(xPoints), min(xPoints)
+                            //currentSection.minX();
+                            //currentSection.maxX();
+                            //150 pix
+                            //currentSection.xStepSize();
+                            *max_element(begin(xPoints),end(xPoints))/100, 0, 1, 1./zoom, 1./100);
     auto yticks = makeTicks(*min_element(begin(yPoints),end(yPoints))/100, *max_element(begin(yPoints),end(yPoints))/100, 0, 1, 1./zoom, 1./100);
 
     vector<QLineF> xTickLines(xticks.size());
-    transform(begin(xticks),end(xticks),begin(xTickLines),[&](double xtick){return QLineF(gridTransform.map(QPointF(xtick*99, 1000)),
-                                                                                          gridTransform.map(QPointF(xtick*99,-1000)));});
+    transform(begin(xticks),end(xticks),
+              begin(xTickLines),
+              [&](double xtick){return QLineF(gridTransform.map(QPointF(xtick*99, 1000)),
+                                              gridTransform.map(QPointF(xtick*99,-1000)));});
     vector<QLineF> yTickLines(yticks.size());
     transform(begin(yticks),end(yticks),begin(yTickLines),[&](double ytick){return QLineF(gridTransform.map(QPointF(-1000,ytick*99)),
                                                                                     gridTransform.map(QPointF( 1000,ytick*99)));});
@@ -298,12 +308,15 @@ vector<double> DensityViewer::pix2hkl(double x_screen, double y_screen) {
     auto tran = imageTransform();
 
     auto res = tran.inverted().map(QPoint(x_screen,y_screen));
-    return vector<double> {double(res.x()),double(res.y())};
+
+    return currentSection.ind2hkl(vector<int> {res.x(),res.y()});
 }
 
 void DensityViewer::mouseMoveEvent(QMouseEvent * event) {
     auto pos = event->pos();
-    emit dataCursorMoved(pos.x(),pos.y(),pix2hkl(pos.x(),pos.y()));
+    emit dataCursorMoved(pos.x(),
+                         pos.y(),
+                         pix2hkl(pos.x(),pos.y()));
 }
 
 void DensityViewer::setColorSaturation(double inp) {

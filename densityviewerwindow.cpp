@@ -12,7 +12,7 @@
 
 QString hkl2str(vector<double> hkl) {
     ostringstream res;
-    res << "h=" << hkl[0] << " k=" << hkl[1];
+    res << "h=" << hkl[0] << " k=" << hkl[1] << " l=" << hkl[2];
     return QString::fromStdString(res.str());
 }
 
@@ -61,7 +61,9 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     colorSaturation->setSingleStep(10);
     colorSaturation->setValue(255);
 
-    connect(colorSaturation, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), [=](int val) {densityViewer->setColorSaturation(val);});
+    connect(colorSaturation,
+            static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
+            [=](int val) {densityViewer->setColorSaturation(val);});
     controllerBar->addWidget(colorSaturation);
 
 
@@ -96,7 +98,10 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     controllerBar->addStretch();
 
     coordinateCursor = new QLabel;
-    connect(densityViewer,&DensityViewer::dataCursorMoved,[=](int, int, vector<double> hkl){coordinateCursor->setText(hkl2str(hkl));});
+    coordinateCursor->setMinimumWidth(150);
+    connect(densityViewer,
+            &DensityViewer::dataCursorMoved,
+            [=](int, int, vector<double> hkl){coordinateCursor->setText(hkl2str(hkl));});
     controllerBar->addWidget(coordinateCursor);
 
     mainLayout->addLayout(controllerBar);

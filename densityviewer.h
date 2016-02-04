@@ -29,6 +29,7 @@ public:
     vector<double> pix2hkl(double, double);
 
     DensityData data;
+    DensitySection currentSection;
 
 
 public slots:

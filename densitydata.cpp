@@ -1,13 +1,87 @@
 #include "densitydata.h"
 #include <random>
+#include <assert.h>
 
 
+OrthogonalTransformation::OrthogonalTransformation(
+        vector<double> i_t,
+        vector<double> i_stepSize) :
+    t{i_t},
+    stepSize{i_stepSize}
+{
+    assert(dimIn()==dimOut());
+    sectionIndices=vector<int>(dimIn());
+    for(int i=0; i<dimIn(); ++i)
+        sectionIndices[i]=i;
+}
 
-DensitySection::DensitySection(vector<double> inp_data, vector<double> inp_size):
+OrthogonalTransformation::OrthogonalTransformation(
+        vector<double> i_t,
+        vector<double> i_stepSize,
+        vector<int> i_sectionIndices) :
+    t{i_t},
+    stepSize{i_stepSize},
+    sectionIndices{i_sectionIndices}
+{ }
+
+vector<double> OrthogonalTransformation::operator()(const vector<int> & ind) {
+    vector<double> res = t;
+    for(int i=0; i<dimIn(); ++i)
+        res[sectionIndices[i]]+=ind[i]*stepSize[i];
+
+    return res;
+}
+
+vector<int> xComesFirst(const string& section) {
+    vector<int> res;
+    if(section=="hkx")
+        res={2,0,1};
+    else if(section=="hxl")
+        res={1,0,2};
+    else if(section=="xkl")
+        res={0,1,2};
+
+    return res;
+}
+vector<int> sectionAxes(const string& section) {
+    auto t=xComesFirst(section);
+    return vector<int>(begin(t)+1,end(t));
+}
+int crossectedCoordinate(const string& section) {
+    return xComesFirst(section)[0];
+}
+
+OrthogonalTransformation OrthogonalTransformation::getSection(
+        string section,
+        int x)
+{
+    assert(dimIn()==3 && dimOut()==3);
+    auto outSectionAxes = sectionAxes(section);
+    auto sectionIndex = crossectedCoordinate(section);
+
+    vector<double> outT = t;
+    outT[sectionIndex]+=x*stepSize[sectionIndex];
+
+    vector<double> outStepSize =
+        {stepSize[outSectionAxes[0]],
+         stepSize[outSectionAxes[1]]};
+
+    return OrthogonalTransformation(outT,outStepSize, outSectionAxes);
+}
+
+
+DensitySection::DensitySection(
+        vector<double> inp_data,
+        vector<double> inp_size,
+        OrthogonalTransformation inp_tran):
     size{inp_size},
-    data{inp_data}
-
+    data{inp_data},
+    tran{inp_tran}
 {}
+
+vector<double> DensitySection::ind2hkl(const vector<int> & indices) {
+    return tran(indices);
+}
 
 template<typename T>
 DataType getH5Type() {}
@@ -25,28 +99,54 @@ DataType getH5Type<double> () {
     return PredType::NATIVE_DOUBLE;
 }
 
-
-
-template<typename A, hsize_t datasetSize>
-void readDatasetRaw(H5File f, const string& datasetName, A* out) {
+template<typename A, hsize_t Nx, hsize_t Ny>
+vector<vector<A> > readMatrix(H5File f, const string& datasetName) {
     DataSet dataset = f.openDataSet(datasetName);
 
-    hsize_t count[1] = {datasetSize};
-    hsize_t offset[1] = {0};
     DataSpace dataspace = dataset.getSpace();
     int rank = dataspace.getSimpleExtentNdims();
-    dataspace.selectAll();
+    assert(rank==2);
+    hsize_t count[2] = {Nx, Ny};
+    dataspace.getSimpleExtentDims(count);
+    assert(count[0]==Nx && count[1]==Ny);
 
-    DataSpace memspace( 1, count );
-    memspace.selectHyperslab( H5S_SELECT_SET, count, offset );
+    A out[Nx][Ny];
+    dataset.read( out, getH5Type<A>());
 
-    dataset.read( out, getH5Type<A>(), memspace, dataspace );
+    vector<vector<A> > res(Nx);
+    for(int i=0; i<Nx; ++i)
+        res[i]=vector<A> (begin(out[i]),end(out[i]));
+
+    return res;
+}
+
+template<typename A, hsize_t datasetSize>
+vector<A> readVector(H5File f, const string& datasetName) {
+    DataSet dataset = f.openDataSet(datasetName);
+
+    DataSpace dataspace = dataset.getSpace();
+    int rank = dataspace.getSimpleExtentNdims();
+    assert(rank==1);
+    hsize_t count[1] = {datasetSize};
+    dataspace.getSimpleExtentDims(count);
+    assert(count[0]==datasetSize);
+
+    A out[datasetSize];
+    dataset.read( out, getH5Type<A>());
+
+    return vector<A>(begin(out),end(out));
 }
 
 template<typename A>
 A readConstant(H5File f, const string& datasetName) {
     A res[1];
-    readDatasetRaw<A,1>(f, datasetName, res);
+
+    DataSet dataset = f.openDataSet(datasetName);
+    DataSpace dataspace = dataset.getSpace();
+    assert(dataspace.getSimpleExtentNdims()==0);
+
+    dataset.read( res, getH5Type<A>());
+
     return res[0];
 }
 
@@ -54,29 +154,17 @@ A readConstant(H5File f, const string& datasetName) {
 
 void DensityData::loadFromHDF5() {
 
-//    <HDF5 dataset "is_direct": shape (), type "|b1">
-//    <HDF5 dataset "maxind": shape (3,), type "<f8">
-//    <HDF5 dataset "metric_tensor": shape (3, 3), type "<f8">
-//    <HDF5 dataset "number_of_pixels": shape (3,), type "<i8">
-//    <HDF5 dataset "number_of_pixels_rebinned": shape (801, 801, 561), type "<i8">
-//    <HDF5 dataset "rebinned_data": shape (801, 801, 561), type "<f8">
-//    <HDF5 dataset "space_group_nr": shape (1,), type "<f8">
-//    <HDF5 dataset "step_size": shape (3,), type "<f8">
-//    <HDF5 dataset "unit_cell": shape (6,), type "<f8">
-
-// Here we need to load the h5 file
-// and (later) load all the information neede to recalculate coordinate system transformation
-
-
-
-    //here check file format string. currently missing
+    //TODO: Here check file format string. currently missing
     auto readProps = FileAccPropList::DEFAULT;
     int mdc_nelmts;
     size_t rdcc_nelmts, rdcc_nbytes;
     double rdcc_w0;
     readProps.getCache(mdc_nelmts, rdcc_nelmts, rdcc_nbytes, rdcc_w0);
-    readProps.setCache(mdc_nelmts, 269251, 1024*1024*500, rdcc_w0); //100mb 100mb is a magic number, should be checked on explicit tests. also all the memory evition strategies should be visited, atm it looks like caching algorithm itself takes a lot of time
-    dataFile = H5File( "/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction.h5", H5F_ACC_RDONLY, FileCreatPropList::DEFAULT, readProps );
+    readProps.setCache(mdc_nelmts, 269251, 1024*1024*500, rdcc_w0); //Magic numbers here
+    dataFile = H5File( "/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction.h5",
+                       H5F_ACC_RDONLY,
+                       FileCreatPropList::DEFAULT,
+                       readProps);
 
     rebinnedData = dataFile.openDataSet("rebinned_data");
     noPixRebinned = dataFile.openDataSet( "number_of_pixels_rebinned" );
@@ -84,10 +172,18 @@ void DensityData::loadFromHDF5() {
     //Read dataset and crystal data
     isDirect = readConstant<bool>(dataFile, "is_direct");
 
+    lowerLimits = readVector<double,3>(dataFile,"maxind");
+    for(auto & ll : lowerLimits)
+        ll=-ll;
+    stepSize = readVector<double, 3>(dataFile, "step_size");
+    unitCell = readVector<double, 6>(dataFile, "unit_cell");
+    metricTensor = readMatrix<double, 3, 3>(dataFile, "metric_tensor");
+
+    tran = OrthogonalTransformation(lowerLimits,stepSize);
 
     DSetCreatPropList cparms = rebinnedData.getCreatePlist();
-    hsize_t chunk_dims[3];
-    int rank_chunk = cparms.getChunk( 3, chunk_dims);
+//    hsize_t chunk_dims[3];
+//    int rank_chunk = cparms.getChunk( 3, chunk_dims);
 
 
     hsize_t datasetDimesions[3];
@@ -118,30 +214,15 @@ DensitySection DensityData::extractSection(QString section, int x) {
 
     hsize_t count[3]={1,1,1};
     hsize_t offset[3]={0,0,0};
-    if(section=="hkx")
-    {
-        rsize=vector<double> {size[0],size[1]};
-        count[0]=size[0];
-        count[1]=size[1];
-        offset[2]=x;
-    }
-    else if(section=="hxl")
-    {
-        rsize=vector<double> {size[0],size[2]};
-        count[0]=size[0];
-        count[2]=size[2];
-        offset[1]=x;
-    }
-    else if(section=="xkl")
-    {
-        rsize=vector<double> {size[1],size[2]};
-        count[1]=size[1];
-        count[2]=size[2];
-        offset[0]=x;
-    }
 
-//    DataSet noPixRebinned = dataFile.openDataSet( "number_of_pixels_rebinned" );
-//    DataSet rebinnedData = dataFile.openDataSet("rebinned_data");
+    auto outSectionAxes = sectionAxes(section.toStdString());
+    auto sectionIndex = crossectedCoordinate(section.toStdString());
+
+    offset[sectionIndex]=x;
+    for(auto i : outSectionAxes)
+        count[i]=size[i];
+
+    rsize=vector<double> {(double)count[outSectionAxes[0]],(double) count[outSectionAxes[1]]};
 
     int * noPixBuffer = (int*) malloc(sizeof(int)*rsize[0]*rsize[1]);
     double * rebinnedDataBuffer = (double*) malloc(sizeof(double)*rsize[0]*rsize[1]);
@@ -166,7 +247,11 @@ DensitySection DensityData::extractSection(QString section, int x) {
     free(rebinnedDataBuffer);
 
 
-    DensitySection res(data,rsize);
+    DensitySection res(data,rsize,tran.getSection(section.toStdString(), x));
     extractSectionMemo={section,x,res};
     return res;
+}
+
+vector<double> DensityData::ind2hkl(const vector<int> & indices) {
+    return tran(indices);
 }
