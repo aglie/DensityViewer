@@ -172,6 +172,15 @@ void drawTicks(QLineF & tickBaseline, vector<QLineF> & gridLines,QPainter & pain
     }
 }
 
+template<typename A>
+A amax(const vector<A> & inp) {
+    return *max_element(begin(inp),end(inp));
+}
+template<typename A>
+A amin(const vector<A> & inp) {
+    return *min_element(begin(inp),end(inp));
+}
+
 void DensityViewer::paintEvent(QPaintEvent * /* event */)
 {
     QPainter painter(this);
@@ -201,37 +210,62 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
     QRect visibleArea(margin, 0, sz.width(), sz.height()-margin);
     //figure out the x coordinates of the visible area rectangle
     QPolygon visibleAreaImCoord = imTransform.inverted().map(QPolygon(visibleArea));
-    vector<double> xPoints, yPoints;
-    for(int i=0; i<visibleAreaImCoord.size(); ++i) {
-        xPoints.push_back(visibleAreaImCoord.point(i).x());
-        yPoints.push_back(visibleAreaImCoord.point(i).y());
-    }
 
-    // xPoints = [currentSection.transformAxis(0,x)]
-    // yPoints = [currentSection.transformAxis(1,y)]
+
+    auto getComponent = [](const QPoint & p, int coord) {
+        if(coord == 0)
+            return p.x();
+        else
+            return p.y();
+    };
+
+    auto generateTicks = [&](int axisN){
+        vector<double> boundaryPointProjections;
+        for(int i=0; i<visibleAreaImCoord.size(); ++i) {
+            const auto p = visibleAreaImCoord.point(i);
+            boundaryPointProjections.push_back(currentSection.tran.transformAxis(axisN, getComponent(p,axisN)));
+        }
+
+        const int minimumSeparationBetweenTicks = 150; //pixels
+        vector<int> farMostPoint(2,0);
+        farMostPoint[axisN]=currentSection.size[axisN];
+        auto axisStretch = imTransform.map(QLineF(0,0,farMostPoint[0],farMostPoint[1]));
+
+        auto ll=currentSection.lowerLimit(axisN);
+        auto ul=currentSection.upperLimit(axisN);
+
+        auto minStepSize = minimumSeparationBetweenTicks/axisStretch.length()*(ul-ll);
+
+        return makeTicks(amin(boundaryPointProjections),
+                                amax(boundaryPointProjections),
+                                ll,
+                                ul,
+                                minStepSize,
+                                currentSection.tran.stepSize[axisN]);
+    };
+
 
     painter.setWorldTransform(QTransform());
 
     auto gridTransform=imTransform;
     gridTransform.translate(0.5,0.5);
 
-
-    auto xticks = makeTicks(*min_element(begin(xPoints),end(xPoints))/100, //max(xPoints), min(xPoints)
-                            //currentSection.minX();
-                            //currentSection.maxX();
-                            //150 pix
-                            //currentSection.xStepSize();
-                            *max_element(begin(xPoints),end(xPoints))/100, 0, 1, 1./zoom, 1./100);
-    auto yticks = makeTicks(*min_element(begin(yPoints),end(yPoints))/100, *max_element(begin(yPoints),end(yPoints))/100, 0, 1, 1./zoom, 1./100);
+    auto xticks = generateTicks(0);
+    auto yticks = generateTicks(1);
 
     vector<QLineF> xTickLines(xticks.size());
     transform(begin(xticks),end(xticks),
               begin(xTickLines),
-              [&](double xtick){return QLineF(gridTransform.map(QPointF(xtick*99, 1000)),
-                                              gridTransform.map(QPointF(xtick*99,-1000)));});
+              [&](double xtick){
+        //Not very beautiful since in this place there is double transformation happens
+                auto xpos = currentSection.tran.transformAxisInv(0,xtick);
+                return gridTransform.map(QLineF(QPointF(xpos,10000),(QPointF(xpos,-10000))));});
+
+
     vector<QLineF> yTickLines(yticks.size());
-    transform(begin(yticks),end(yticks),begin(yTickLines),[&](double ytick){return QLineF(gridTransform.map(QPointF(-1000,ytick*99)),
-                                                                                    gridTransform.map(QPointF( 1000,ytick*99)));});
+    transform(begin(yticks),end(yticks),begin(yTickLines),[&](double ytick){
+        auto ypos = currentSection.tran.transformAxisInv(0,ytick);
+        return gridTransform.map(QLineF(QPointF(-1000,ypos),QPointF( 1000,ypos)));});
 
 
     if(showGrid) {

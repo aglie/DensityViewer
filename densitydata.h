@@ -19,9 +19,12 @@ public:
                              vector<int> i_sectionIndices);
     vector<double> operator()(const vector<int>& ind);
     OrthogonalTransformation getSection(string section, int x);
+    double transformAxis(int axisN, int index);
+    double transformAxisInv(int axisN, double h);
+    vector<double> stepSize;
 private:
     vector<double> t;
-    vector<double> stepSize;
+
     vector<int> sectionIndices;
     int dimIn() {return stepSize.size();}
     int dimOut() {return t.size();}
@@ -35,16 +38,19 @@ public:
     DensitySection() {}
     DensitySection(vector<double> inp_data,
                    vector<double> inp_size,
-                   OrthogonalTransformation inp_tran);
+                   OrthogonalTransformation inp_tran,
+                   string section);
     vector<double> size;
     vector<double> data;
     double at(int x, int y) {return data[x*size[1]+y];}
     vector<double> ind2hkl(const vector<int> & indices);
+    double lowerLimit(int axisN);
+    double upperLimit(int axisN);
+    OrthogonalTransformation tran;
 private:
     vector<int> axisDirs;
     int sectionDir;
     int x;
-    OrthogonalTransformation tran;
 };
 
 class DensityData

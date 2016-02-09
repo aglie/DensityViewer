@@ -31,7 +31,6 @@ public:
     DensityData data;
     DensitySection currentSection;
 
-
 public slots:
     void setColorSaturation(double);
     void setSectionIndex(int);

@@ -2,6 +2,26 @@
 #include <random>
 #include <assert.h>
 
+vector<int> xComesFirst(const string& section) {
+    vector<int> res;
+    if(section=="hkx")
+        res={2,0,1};
+    else if(section=="hxl")
+        res={1,0,2};
+    else if(section=="xkl")
+        res={0,1,2};
+
+    return res;
+}
+vector<int> sectionAxes(const string& section) {
+    auto t=xComesFirst(section);
+    return vector<int>(begin(t)+1,end(t));
+}
+int crossectedCoordinate(const string& section) {
+    return xComesFirst(section)[0];
+}
+
+
 
 OrthogonalTransformation::OrthogonalTransformation(
         vector<double> i_t,
@@ -31,25 +51,15 @@ vector<double> OrthogonalTransformation::operator()(const vector<int> & ind) {
 
     return res;
 }
+double OrthogonalTransformation::transformAxis(int axisN, int index) {
+    return t[sectionIndices[axisN]]+index*stepSize[sectionIndices[axisN]];
+}
 
-vector<int> xComesFirst(const string& section) {
-    vector<int> res;
-    if(section=="hkx")
-        res={2,0,1};
-    else if(section=="hxl")
-        res={1,0,2};
-    else if(section=="xkl")
-        res={0,1,2};
+double OrthogonalTransformation::transformAxisInv(int axisN, double index) {
+    return (index-t[sectionIndices[axisN]])/stepSize[sectionIndices[axisN]];
+}
 
-    return res;
-}
-vector<int> sectionAxes(const string& section) {
-    auto t=xComesFirst(section);
-    return vector<int>(begin(t)+1,end(t));
-}
-int crossectedCoordinate(const string& section) {
-    return xComesFirst(section)[0];
-}
+
 
 OrthogonalTransformation OrthogonalTransformation::getSection(
         string section,
@@ -73,14 +83,28 @@ OrthogonalTransformation OrthogonalTransformation::getSection(
 DensitySection::DensitySection(
         vector<double> inp_data,
         vector<double> inp_size,
-        OrthogonalTransformation inp_tran):
+        OrthogonalTransformation inp_tran,
+        string section):
     size{inp_size},
     data{inp_data},
-    tran{inp_tran}
-{}
+    tran{inp_tran},
+    axisDirs{sectionAxes(section)},
+    sectionDir{crossectedCoordinate(section)}
+{ }
 
 vector<double> DensitySection::ind2hkl(const vector<int> & indices) {
     return tran(indices);
+}
+
+double DensitySection::lowerLimit(int axisN) {
+    auto t=tran({0,0});
+    return t[axisDirs[axisN]];
+}
+
+double DensitySection::upperLimit(int axisN) {
+    vector<int> t(2,0);
+    t[axisN]=size[axisN];
+    return tran(t)[axisDirs[axisN]];
 }
 
 template<typename T>
@@ -247,10 +271,12 @@ DensitySection DensityData::extractSection(QString section, int x) {
     free(rebinnedDataBuffer);
 
 
-    DensitySection res(data,rsize,tran.getSection(section.toStdString(), x));
+    DensitySection res(data,rsize,tran.getSection(section.toStdString(), x),section.toStdString());
     extractSectionMemo={section,x,res};
     return res;
 }
+
+
 
 vector<double> DensityData::ind2hkl(const vector<int> & indices) {
     return tran(indices);
