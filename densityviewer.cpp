@@ -4,10 +4,9 @@
 #include <QImage>
 #include <QPainter>
 #include <QPen>
-#include <math.h>
+#include <cmath>
 #include <QTransform>
 #include <assert.h>
-#include <math.h>
 #include <algorithm>
 #include <QLineF>
 #include <sstream>
@@ -59,7 +58,7 @@ QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterp
 }
 
 void DensityViewer::initSpecifics() {
-    zoom = 10;
+    zoom =  10;
     x_pos = 0;
     y_pos = 0;
     colorSaturation = 255;
@@ -67,13 +66,18 @@ void DensityViewer::initSpecifics() {
     sectionIndex=0;
     currentSectionDirection = "hkx";
     showGrid=true;
+    setInteractionMode(DensityViewerInteractionMode::pan);
+    drawZoomRect = false;
+    margin=50;
 }
 
 DensityViewer::DensityViewer(QWidget *parent) :
     QWidget(parent)
 {
     initSpecifics();
-    setMouseTracking(true);
+
+    //setMouseTracking(true);
+
     //ui->setupUi(this);
 }
 
@@ -83,9 +87,7 @@ DensityViewer::~DensityViewer()
 }
 
 QTransform DensityViewer::imageTransform() {
-    QTransform tran;
-    tran.translate(x_pos,y_pos);
-    tran.scale(zoom,zoom);
+    QTransform tran(1,0,0,-1,0,0);
 
     //in place 2d cholesky decomposition
     const auto & m = currentSection.tran.metricTensor;
@@ -94,7 +96,17 @@ QTransform DensityViewer::imageTransform() {
     double cosab = m[0][1]/(a*b);
     double sinab = sqrt(1-cosab*cosab);
 
+
+
+    auto pa=plottingArea();
+
+    tran.translate(x_pos,y_pos);
+    tran.translate(-pa.center().x(),-pa.center().y());
     tran*=QTransform(a,0,b*cosab,b*sinab,0,0).inverted();
+    tran*=QTransform(zoom,0,0,zoom,0,0);
+
+    tran*=QTransform(1,0,0,1,pa.center().x(),pa.center().y());
+
     return tran;
 }
 
@@ -208,7 +220,6 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
     painter.drawImage(0,0,image);
 
     // The axes start
-    auto margin = 50;
     auto sz = size();
 
     //auto pen = QPen(Qt::blue, 2, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin);
@@ -320,19 +331,18 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
         painter.drawRect(margin,1,sz.width()-margin-1,sz.height()-margin);
     }
 
+    if(drawZoomRect) {
+        painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(QRect(zoomRectEnd,zoomRectStart));
+    }
+
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-
-
-
-
-//    painter.drawLine(rect.bottomLeft(), rect.topRight());
-//    QPixmap img(100,100);
-//    img.se
 }
 
 QSize DensityViewer::sizeHint() const
 {
-    return QSize(400, 400);
+    return QSize(600, 600);
 }
 
 void DensityViewer::changeZoom(double factor) {
@@ -340,9 +350,13 @@ void DensityViewer::changeZoom(double factor) {
     update();
 }
 
-void DensityViewer::pan(double dx,double dy) {
-    x_pos+=dx/zoom;
-    y_pos+=dy/zoom;
+void DensityViewer::pan(int dx,int dy) { //panning in screen pixels
+    auto tran = imageTransform();
+
+    QLineF tline = tran.inverted().map(QLineF(0,0,dx,dy));
+
+    x_pos+=tline.dx();
+    y_pos+=tline.dy();
     update();
 }
 
@@ -354,11 +368,76 @@ vector<double> DensityViewer::pix2hkl(double x_screen, double y_screen) {
     return currentSection.ind2hkl(vector<int> {res.x(),res.y()});
 }
 
+void DensityViewer::mousePressEvent(QMouseEvent * event) {
+    switch(interactionMode) {
+    case DensityViewerInteractionMode::pan : {
+        p.panning=true;
+        p.lastPos=event->pos();
+        break;
+    }
+    case DensityViewerInteractionMode::zoom : {
+        z.zoomRectStart = event->pos();
+        break;
+    }
+    }
+}
+
 void DensityViewer::mouseMoveEvent(QMouseEvent * event) {
     auto pos = event->pos();
-    emit dataCursorMoved(pos.x(),
-                         pos.y(),
-                         pix2hkl(pos.x(),pos.y()));
+
+    switch(interactionMode) {
+    case DensityViewerInteractionMode::pan : {
+        if(p.panning) {
+            pan(pos.x()-p.lastPos.x(),pos.y()-p.lastPos.y());
+            p.lastPos=pos;
+        }
+        break;
+    }
+    case DensityViewerInteractionMode::zoom : {
+        drawZoomRect = true;
+        zoomRectStart = z.zoomRectStart;
+        zoomRectEnd = event->pos();
+        update();
+        break;
+    }
+    case DensityViewerInteractionMode::info : {
+        emit dataCursorMoved(pos.x(),
+                             pos.y(),
+                             pix2hkl(pos.x(),pos.y()));
+        break;
+    }
+    }
+
+}
+
+void DensityViewer::mouseReleaseEvent(QMouseEvent * event) {
+    auto pos = event->pos();
+    switch(interactionMode) {
+    case DensityViewerInteractionMode::pan : {
+        pan(pos.x()-p.lastPos.x(),pos.y()-p.lastPos.y());
+        p.panning=false;
+        break;
+    }
+    case DensityViewerInteractionMode::zoom : {
+        drawZoomRect = false;
+        zoomTo(QRect(z.zoomRectStart, pos));
+    }
+    }
+}
+
+void DensityViewer::setInteractionMode(DensityViewerInteractionMode m) {
+    interactionMode = m;
+    switch(interactionMode) {
+    case DensityViewerInteractionMode::pan : {
+        p.panning=false;
+        break;
+    }
+    case DensityViewerInteractionMode::zoom : {
+        z.zoomStarted=false;
+        break;
+    }
+
+    }
 }
 
 void DensityViewer::setColorSaturation(double inp) {
@@ -379,4 +458,18 @@ void DensityViewer::setSectionDirection(QString inp) {
 void DensityViewer::setGrid(bool inp) {
     showGrid=inp;
     update();
+}
+
+QRect DensityViewer::plottingArea() {
+    return QRect(margin,1,size().width()-margin-1,size().height()-margin);
+}
+
+void DensityViewer::zoomTo(QRect target) {
+    QRect pa = plottingArea();
+    QLine dr(target.center(),pa.center());
+    pan(dr.dx(),dr.dy());
+
+    double factor = min(abs(double(pa.width())/target.width()),
+                        abs(double(pa.height())/target.height()));
+    changeZoom(factor);
 }

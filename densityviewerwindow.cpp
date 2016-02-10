@@ -95,6 +95,19 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
     controllerBar->addWidget(gridOn);
 
+    auto panButton = new QPushButton("pan");
+    connect(panButton,
+            &QPushButton::clicked,
+            [=](){densityViewer->setInteractionMode(DensityViewerInteractionMode::pan);});
+    controllerBar->addWidget(panButton);
+
+    auto zoomButton = new QPushButton("zoom");
+    connect(zoomButton,
+            &QPushButton::clicked,
+            [=](){densityViewer->setInteractionMode(DensityViewerInteractionMode::zoom);});
+    controllerBar->addWidget(zoomButton);
+
+
     controllerBar->addStretch();
 
     coordinateCursor = new QLabel;
