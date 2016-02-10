@@ -13,15 +13,18 @@ class OrthogonalTransformation {
 public:
     OrthogonalTransformation() {}
     OrthogonalTransformation(vector<double> i_t,
-                             vector<double> i_stepSize);
+                             vector<double> i_stepSize,
+                             vector<vector<double>> i_metricTensor);
     OrthogonalTransformation(vector<double> i_t,
                              vector<double> i_stepSize,
-                             vector<int> i_sectionIndices);
+                             vector<int> i_sectionIndices,
+                             vector<vector<double>> i_metricTensor);
     vector<double> operator()(const vector<int>& ind);
     OrthogonalTransformation getSection(string section, int x);
     double transformAxis(int axisN, int index);
     double transformAxisInv(int axisN, double h);
     vector<double> stepSize;
+    vector<vector<double>> metricTensor;
 private:
     vector<double> t;
 

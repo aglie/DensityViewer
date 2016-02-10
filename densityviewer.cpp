@@ -59,7 +59,7 @@ QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterp
 }
 
 void DensityViewer::initSpecifics() {
-    zoom = 1;
+    zoom = 10;
     x_pos = 0;
     y_pos = 0;
     colorSaturation = 255;
@@ -86,7 +86,15 @@ QTransform DensityViewer::imageTransform() {
     QTransform tran;
     tran.translate(x_pos,y_pos);
     tran.scale(zoom,zoom);
-    tran*=QTransform(1,0,1./2,sqrt(3.)/2,0,0);
+
+    //in place 2d cholesky decomposition
+    const auto & m = currentSection.tran.metricTensor;
+    double a = sqrt(m[0][0]);
+    double b = sqrt(m[1][1]);
+    double cosab = m[0][1]/(a*b);
+    double sinab = sqrt(1-cosab*cosab);
+
+    tran*=QTransform(a,0,b*cosab,b*sinab,0,0).inverted();
     return tran;
 }
 
@@ -264,7 +272,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
 
     vector<QLineF> yTickLines(yticks.size());
     transform(begin(yticks),end(yticks),begin(yTickLines),[&](double ytick){
-        auto ypos = currentSection.tran.transformAxisInv(0,ytick);
+        auto ypos = currentSection.tran.transformAxisInv(1,ytick);
         return gridTransform.map(QLineF(QPointF(-1000,ypos),QPointF( 1000,ypos)));});
 
 

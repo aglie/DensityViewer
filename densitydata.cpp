@@ -25,9 +25,11 @@ int crossectedCoordinate(const string& section) {
 
 OrthogonalTransformation::OrthogonalTransformation(
         vector<double> i_t,
-        vector<double> i_stepSize) :
+        vector<double> i_stepSize,
+        vector<vector<double>> i_metricTensor) :
     t{i_t},
-    stepSize{i_stepSize}
+    stepSize{i_stepSize},
+    metricTensor{i_metricTensor}
 {
     assert(dimIn()==dimOut());
     sectionIndices=vector<int>(dimIn());
@@ -38,10 +40,12 @@ OrthogonalTransformation::OrthogonalTransformation(
 OrthogonalTransformation::OrthogonalTransformation(
         vector<double> i_t,
         vector<double> i_stepSize,
-        vector<int> i_sectionIndices) :
+        vector<int> i_sectionIndices,
+        vector<vector<double>> i_metricTensor) :
     t{i_t},
     stepSize{i_stepSize},
-    sectionIndices{i_sectionIndices}
+    sectionIndices{i_sectionIndices},
+    metricTensor{i_metricTensor}
 { }
 
 vector<double> OrthogonalTransformation::operator()(const vector<int> & ind) {
@@ -52,14 +56,12 @@ vector<double> OrthogonalTransformation::operator()(const vector<int> & ind) {
     return res;
 }
 double OrthogonalTransformation::transformAxis(int axisN, int index) {
-    return t[sectionIndices[axisN]]+index*stepSize[sectionIndices[axisN]];
+    return t[sectionIndices[axisN]]+index*stepSize[axisN];
 }
 
 double OrthogonalTransformation::transformAxisInv(int axisN, double index) {
-    return (index-t[sectionIndices[axisN]])/stepSize[sectionIndices[axisN]];
+    return (index-t[sectionIndices[axisN]])/stepSize[axisN];
 }
-
-
 
 OrthogonalTransformation OrthogonalTransformation::getSection(
         string section,
@@ -76,7 +78,12 @@ OrthogonalTransformation OrthogonalTransformation::getSection(
         {stepSize[outSectionAxes[0]],
          stepSize[outSectionAxes[1]]};
 
-    return OrthogonalTransformation(outT,outStepSize, outSectionAxes);
+    vector<vector<double>> outMetricTensor(2,vector<double>(2,0));
+    for(int i=0; i<2; ++i)
+        for(int j=0; j<2; ++j)
+            outMetricTensor[i][j]=metricTensor[outSectionAxes[i]][outSectionAxes[j]];
+
+    return OrthogonalTransformation(outT,outStepSize, outSectionAxes,outMetricTensor);
 }
 
 
@@ -203,7 +210,7 @@ void DensityData::loadFromHDF5() {
     unitCell = readVector<double, 6>(dataFile, "unit_cell");
     metricTensor = readMatrix<double, 3, 3>(dataFile, "metric_tensor");
 
-    tran = OrthogonalTransformation(lowerLimits,stepSize);
+    tran = OrthogonalTransformation(lowerLimits,stepSize,metricTensor);
 
     DSetCreatPropList cparms = rebinnedData.getCreatePlist();
 //    hsize_t chunk_dims[3];
