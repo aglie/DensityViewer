@@ -225,14 +225,6 @@ void DensityData::loadFromHDF5() {
 
 DensityData::DensityData()
 {
-//    const int sz=100;
-//    size={sz,sz,sz};
-//    data=vector<double>(sz*sz*sz,0);
-
-//    for(int i=0; i<sz; ++i)
-//        for(int j=0; j<sz; ++j)
-//            for(int k=0; k<sz; ++k)
-//                data[(i*size[0]+j)*size[1]+k] = rand() % 255;
     loadFromHDF5();
 }
 
