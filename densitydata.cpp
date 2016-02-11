@@ -192,7 +192,7 @@ void DensityData::loadFromHDF5() {
     double rdcc_w0;
     readProps.getCache(mdc_nelmts, rdcc_nelmts, rdcc_nbytes, rdcc_w0);
     readProps.setCache(mdc_nelmts, 269251, 1024*1024*500, rdcc_w0); //Magic numbers here
-    dataFile = H5File( "/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction2.h5",
+    dataFile = H5File( "/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction.h5",
                        H5F_ACC_RDONLY,
                        FileCreatPropList::DEFAULT,
                        readProps);

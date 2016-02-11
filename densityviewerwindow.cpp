@@ -95,6 +95,12 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
     controllerBar->addWidget(gridOn);
 
+    auto infoButton = new QPushButton("info");
+    connect(infoButton,
+            &QPushButton::clicked,
+            [=](){densityViewer->setInteractionMode(DensityViewerInteractionMode::info);});
+    controllerBar->addWidget(infoButton);
+
     auto panButton = new QPushButton("pan");
     connect(panButton,
             &QPushButton::clicked,
@@ -106,6 +112,13 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
             &QPushButton::clicked,
             [=](){densityViewer->setInteractionMode(DensityViewerInteractionMode::zoom);});
     controllerBar->addWidget(zoomButton);
+
+    auto homeButton = new QPushButton("home");
+    connect(homeButton,
+            SIGNAL(pressed()),
+            densityViewer,
+            SLOT(goHome()));
+    controllerBar->addWidget(homeButton);
 
 
     controllerBar->addStretch();

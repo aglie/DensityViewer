@@ -40,7 +40,8 @@ public slots:
     void setSectionDirection(QString);
     void setGrid(bool);
     void setInteractionMode(DensityViewerInteractionMode m);
-    void zoomTo(QRect);
+    void zoomTo(QRectF);
+    void goHome();
 
 signals:
     void dataCursorMoved(int x, int y, vector<double> hkl);
@@ -73,6 +74,7 @@ private:
     QString currentSectionDirection;
     QTransform imageTransform();
     bool showGrid;
+    QRectF contentsBoundingRect();
 
     void mouseMoveEvent(QMouseEvent * event) Q_DECL_OVERRIDE;
     void mousePressEvent(QMouseEvent * event) Q_DECL_OVERRIDE;

@@ -58,9 +58,7 @@ QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterp
 }
 
 void DensityViewer::initSpecifics() {
-    zoom =  10;
-    x_pos = 0;
-    y_pos = 0;
+
     colorSaturation = 255;
     data = DensityData();
     sectionIndex=0;
@@ -69,6 +67,11 @@ void DensityViewer::initSpecifics() {
     setInteractionMode(DensityViewerInteractionMode::pan);
     drawZoomRect = false;
     margin=50;
+    zoom = 1;
+    x_pos = 0;
+    y_pos = 0;
+    currentSection = data.extractSection(currentSectionDirection,sectionIndex);
+    goHome();
 }
 
 DensityViewer::DensityViewer(QWidget *parent) :
@@ -95,8 +98,6 @@ QTransform DensityViewer::imageTransform() {
     double b = sqrt(m[1][1]);
     double cosab = m[0][1]/(a*b);
     double sinab = sqrt(1-cosab*cosab);
-
-
 
     auto pa=plottingArea();
 
@@ -288,7 +289,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
 
 
     if(showGrid) {
-        painter.setPen(QPen(Qt::blue,2, Qt::DotLine));
+        painter.setPen(QPen(Qt::blue,1, Qt::DashLine));
         for (auto line : xTickLines) {
             painter.drawLine(line);
         }
@@ -421,6 +422,7 @@ void DensityViewer::mouseReleaseEvent(QMouseEvent * event) {
     case DensityViewerInteractionMode::zoom : {
         drawZoomRect = false;
         zoomTo(QRect(z.zoomRectStart, pos));
+        break;
     }
     }
 }
@@ -430,13 +432,17 @@ void DensityViewer::setInteractionMode(DensityViewerInteractionMode m) {
     switch(interactionMode) {
     case DensityViewerInteractionMode::pan : {
         p.panning=false;
+        setMouseTracking(false);
         break;
     }
     case DensityViewerInteractionMode::zoom : {
         z.zoomStarted=false;
+        setMouseTracking(false);
         break;
     }
-
+    case DensityViewerInteractionMode::info : {
+        setMouseTracking(true);
+    }
     }
 }
 
@@ -464,12 +470,23 @@ QRect DensityViewer::plottingArea() {
     return QRect(margin,1,size().width()-margin-1,size().height()-margin);
 }
 
-void DensityViewer::zoomTo(QRect target) {
+void DensityViewer::zoomTo(QRectF target) {
     QRect pa = plottingArea();
-    QLine dr(target.center(),pa.center());
+    QLineF dr(target.center(),pa.center());
     pan(dr.dx(),dr.dy());
 
     double factor = min(abs(double(pa.width())/target.width()),
                         abs(double(pa.height())/target.height()));
     changeZoom(factor);
+}
+
+QRectF DensityViewer::contentsBoundingRect() {
+    auto p=QPolygonF(QRectF(0,0,currentSection.size[0],currentSection.size[1]));
+    auto t=imageTransform().map(p);
+    auto tt=t.boundingRect();
+    return tt;
+}
+
+void DensityViewer::goHome() {
+    zoomTo(contentsBoundingRect());
 }
