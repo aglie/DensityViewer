@@ -36,7 +36,7 @@ public:
 
 public slots:
     void setColorSaturation(double);
-    void setSectionIndex(int);
+    void setSectionIndex(double);
     void setSectionDirection(QString);
     void setGrid(bool);
     void setInteractionMode(DensityViewerInteractionMode m);
@@ -44,6 +44,7 @@ public slots:
     void goHome();
 
 signals:
+    void changedSectionDirection();
     void dataCursorMoved(int x, int y, vector<double> hkl);
 
 private:
@@ -65,12 +66,11 @@ private:
     QPoint zoomRectStart;
     QPoint zoomRectEnd;
 
-    Ui::DensityViewer *ui;
+//    Ui::DensityViewer *ui;
     double zoom;
     double x_pos, y_pos;
     double colorSaturation;
-    int sectionIndex; //position in hkx like things
-    void initSpecifics();
+    double sectionIndex; //position in hkx like things
     QString currentSectionDirection;
     QTransform imageTransform();
     bool showGrid;

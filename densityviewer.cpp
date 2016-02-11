@@ -57,10 +57,12 @@ QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterp
 
 }
 
-void DensityViewer::initSpecifics() {
 
+DensityViewer::DensityViewer(QWidget *parent) :
+    QWidget(parent),
+    data("/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction.h5")
+{
     colorSaturation = 255;
-    data = DensityData();
     sectionIndex=0;
     currentSectionDirection = "hkx";
     showGrid=true;
@@ -75,14 +77,6 @@ void DensityViewer::initSpecifics() {
     y_pos = 0;
     updateSection();
     goHome();
-}
-
-DensityViewer::DensityViewer(QWidget *parent) :
-    QWidget(parent)
-{
-    initSpecifics();
-
-    //setMouseTracking(true);
 
     //ui->setupUi(this);
 }
@@ -254,7 +248,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
                                 ll,
                                 ul,
                                 minStepSize,
-                                currentSection.tran.stepSize[axisN]);
+                                currentSection.tran.stepSizes[axisN]);
     };
 
 
@@ -299,7 +293,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
 
     //Draw figure title
     painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
-    painter.drawText(QRect(pa.left(),0,pa.width(),pa.top()),Qt::AlignHCenter | Qt::AlignVCenter,"hkx");
+    painter.drawText(QRect(pa.left(),0,pa.width(),pa.top()),Qt::AlignHCenter | Qt::AlignVCenter, QString::fromStdString(currentSection.title()));
     //currentSection
 
     // Figure out the positions and draw the tick labels
@@ -445,7 +439,7 @@ void DensityViewer::setColorSaturation(double inp) {
     pixelateSection();
 }
 
-void DensityViewer::setSectionIndex(int inp) {
+void DensityViewer::setSectionIndex(double inp) {
     sectionIndex=inp;
     updateSection();
 }
@@ -498,6 +492,7 @@ void DensityViewer::pixelateSection() {
 }
 
 void DensityViewer::updateSection() {
-    currentSection = data.extractSection(currentSectionDirection,sectionIndex);
+    currentSection = data.extractSection(currentSectionDirection.toStdString(),sectionIndex);
     pixelateSection();
+    emit changedSectionDirection();
 }

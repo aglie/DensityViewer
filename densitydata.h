@@ -23,13 +23,13 @@ public:
     OrthogonalTransformation getSection(string section, int x);
     double transformAxis(int axisN, int index);
     double transformAxisInv(int axisN, double h);
-    vector<double> stepSize;
+    vector<double> stepSizes;
     vector<vector<double>> metricTensor;
 private:
     vector<double> t;
 
     vector<int> sectionIndices;
-    int dimIn() {return stepSize.size();}
+    int dimIn() {return stepSizes.size();}
     int dimOut() {return t.size();}
 };
 
@@ -50,36 +50,40 @@ public:
     double lowerLimit(int axisN);
     double upperLimit(int axisN);
     OrthogonalTransformation tran;
+    string title();
+    int sectionDir;
 private:
     vector<int> axisDirs;
-    int sectionDir;
+
     int x;
 };
 
 class DensityData
 {
 public:
-    DensityData();
+    DensityData(string filename);
     vector<double> data;
-    vector<double> size; //TODO: change to size type, not double
-    DensitySection extractSection(QString section,int x);
+    vector<int> size; //TODO: change to size type, not double
+    DensitySection extractSection(string section, double x);
     struct extractSectionMemoStruc {
-        QString section;
-        int x;
+        string section;
+        double x;
         DensitySection res;
     };
     extractSectionMemoStruc extractSectionMemo;
 
     double at(int x, int y, int z) {return data[(x*size[1]+y)*size[2]+z];}
     vector<double> ind2hkl(const vector<int> & indices);
+    double lowerLimit(int i);
+    double upperLimit(int i);
+    double stepSize(int i);
 private:
-    void loadFromHDF5();
     H5File dataFile;
     DataSet rebinnedData, noPixRebinned;
 
     bool isDirect;
     vector<double> lowerLimits;
-    vector<double> stepSize;
+    vector<double> stepSizes;
     vector<vector<double> > metricTensor;
     vector<double> unitCell;
     OrthogonalTransformation tran;

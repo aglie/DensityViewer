@@ -6,7 +6,7 @@
 #include <QWidget>
 #include <QTextEdit>
 #include <sstream>
-#include <QSpinBox>
+
 #include <QComboBox>
 #include <QCheckBox>
 
@@ -16,13 +16,20 @@ QString hkl2str(vector<double> hkl) {
     return QString::fromStdString(res.str());
 }
 
+void DensityViewerWindow::setXLimits() {
+    int axis = densityViewer->currentSection.sectionDir;
+    sectionIndex->setMaximum(densityViewer->data.upperLimit(axis));
+    sectionIndex->setMinimum(densityViewer->data.lowerLimit(axis));
+    sectionIndex->setSingleStep(densityViewer->data.stepSize(axis));
+}
+
 DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     QMainWindow(parent)
 {
     //ui->setupUi(this);
 
     QHBoxLayout *mainLayout = new QHBoxLayout;
-    auto densityViewer = new DensityViewer;
+    densityViewer = new DensityViewer;
     mainLayout->addWidget(densityViewer);
 
     auto controllerBar = new QVBoxLayout;
@@ -80,12 +87,12 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
     auto xStretch = new QHBoxLayout;
     xStretch->addWidget(new QLabel("x="));
-    auto sectionIndex = new QSpinBox;
-    sectionIndex->setMaximum(densityViewer->data.size[2]);
-    sectionIndex->setSingleStep(1);
+    sectionIndex = new QDoubleSpinBox;
+    setXLimits();
     sectionIndex->setValue(0);
 
-    connect(sectionIndex, SIGNAL(valueChanged(int)),densityViewer, SLOT(setSectionIndex(int)));
+    connect(sectionIndex, SIGNAL(valueChanged(double)),densityViewer, SLOT(setSectionIndex(double)));
+    connect(densityViewer, SIGNAL(changedSectionDirection()),this,SLOT(setXLimits()));
 
     xStretch->addWidget(sectionIndex);
     controllerBar->addLayout(xStretch);

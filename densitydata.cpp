@@ -1,6 +1,8 @@
 #include "densitydata.h"
 #include <random>
 #include <assert.h>
+#include <sstream>
+#include <cmath>
 
 vector<int> xComesFirst(const string& section) {
     vector<int> res;
@@ -21,14 +23,12 @@ int crossectedCoordinate(const string& section) {
     return xComesFirst(section)[0];
 }
 
-
-
 OrthogonalTransformation::OrthogonalTransformation(
         vector<double> i_t,
-        vector<double> i_stepSize,
+        vector<double> i_stepSizes,
         vector<vector<double>> i_metricTensor) :
     t{i_t},
-    stepSize{i_stepSize},
+    stepSizes{i_stepSizes},
     metricTensor{i_metricTensor}
 {
     assert(dimIn()==dimOut());
@@ -39,11 +39,11 @@ OrthogonalTransformation::OrthogonalTransformation(
 
 OrthogonalTransformation::OrthogonalTransformation(
         vector<double> i_t,
-        vector<double> i_stepSize,
+        vector<double> i_stepSizes,
         vector<int> i_sectionIndices,
         vector<vector<double>> i_metricTensor) :
     t{i_t},
-    stepSize{i_stepSize},
+    stepSizes{i_stepSizes},
     sectionIndices{i_sectionIndices},
     metricTensor{i_metricTensor}
 { }
@@ -51,16 +51,16 @@ OrthogonalTransformation::OrthogonalTransformation(
 vector<double> OrthogonalTransformation::operator()(const vector<int> & ind) {
     vector<double> res = t;
     for(int i=0; i<dimIn(); ++i)
-        res[sectionIndices[i]]+=ind[i]*stepSize[i];
+        res[sectionIndices[i]]+=ind[i]*stepSizes[i];
 
     return res;
 }
 double OrthogonalTransformation::transformAxis(int axisN, int index) {
-    return t[sectionIndices[axisN]]+index*stepSize[axisN];
+    return t[sectionIndices[axisN]]+index*stepSizes[axisN];
 }
 
 double OrthogonalTransformation::transformAxisInv(int axisN, double index) {
-    return (index-t[sectionIndices[axisN]])/stepSize[axisN];
+    return (index-t[sectionIndices[axisN]])/stepSizes[axisN];
 }
 
 OrthogonalTransformation OrthogonalTransformation::getSection(
@@ -72,11 +72,11 @@ OrthogonalTransformation OrthogonalTransformation::getSection(
     auto sectionIndex = crossectedCoordinate(section);
 
     vector<double> outT = t;
-    outT[sectionIndex]+=x*stepSize[sectionIndex];
+    outT[sectionIndex]+=x*stepSizes[sectionIndex];
 
     vector<double> outStepSize =
-        {stepSize[outSectionAxes[0]],
-         stepSize[outSectionAxes[1]]};
+        {stepSizes[outSectionAxes[0]],
+         stepSizes[outSectionAxes[1]]};
 
     vector<vector<double>> outMetricTensor(2,vector<double>(2,0));
     for(int i=0; i<2; ++i)
@@ -112,6 +112,14 @@ double DensitySection::upperLimit(int axisN) {
     vector<int> t(2,0);
     t[axisN]=size[axisN];
     return tran(t)[axisDirs[axisN]];
+}
+
+string DensitySection::title() {
+    vector<string> res={"h","k","l"};
+    ostringstream t;
+    t<<tran({0,0})[sectionDir];
+    res[sectionDir] = t.str();
+    return res[0]+res[1]+res[2];
 }
 
 template<typename T>
@@ -183,7 +191,7 @@ A readConstant(H5File f, const string& datasetName) {
 
 //template<Type A,
 
-void DensityData::loadFromHDF5() {
+DensityData::DensityData(string filename) {
 
     //TODO: Here check file format string. currently missing
     auto readProps = FileAccPropList::DEFAULT;
@@ -192,7 +200,7 @@ void DensityData::loadFromHDF5() {
     double rdcc_w0;
     readProps.getCache(mdc_nelmts, rdcc_nelmts, rdcc_nbytes, rdcc_w0);
     readProps.setCache(mdc_nelmts, 269251, 1024*1024*500, rdcc_w0); //Magic numbers here
-    dataFile = H5File( "/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction2.h5",
+    dataFile = H5File( filename,
                        H5F_ACC_RDONLY,
                        FileCreatPropList::DEFAULT,
                        readProps);
@@ -206,11 +214,11 @@ void DensityData::loadFromHDF5() {
     lowerLimits = readVector<double,3>(dataFile,"maxind");
     for(auto & ll : lowerLimits)
         ll=-ll;
-    stepSize = readVector<double, 3>(dataFile, "step_size");
+    stepSizes = readVector<double, 3>(dataFile, "step_size");
     unitCell = readVector<double, 6>(dataFile, "unit_cell");
     metricTensor = readMatrix<double, 3, 3>(dataFile, "metric_tensor");
 
-    tran = OrthogonalTransformation(lowerLimits,stepSize,metricTensor);
+    tran = OrthogonalTransformation(lowerLimits,stepSizes,metricTensor);
 
     DSetCreatPropList cparms = rebinnedData.getCreatePlist();
 //    hsize_t chunk_dims[3];
@@ -220,28 +228,28 @@ void DensityData::loadFromHDF5() {
     hsize_t datasetDimesions[3];
     rebinnedData.getSpace().getSimpleExtentDims( datasetDimesions, NULL);
 
-    size = vector<double>(begin(datasetDimesions), end(datasetDimesions));
+    size = vector<int>(begin(datasetDimesions), end(datasetDimesions));
 }
 
-DensityData::DensityData()
-{
-    loadFromHDF5();
-}
 
-DensitySection DensityData::extractSection(QString section, int x) {
+DensitySection DensityData::extractSection(string section, double x) {
     if(section==extractSectionMemo.section && x==extractSectionMemo.x)
         return extractSectionMemo.res;
-
 
     vector<double> rsize, rdata;
 
     hsize_t count[3]={1,1,1};
     hsize_t offset[3]={0,0,0};
 
-    auto outSectionAxes = sectionAxes(section.toStdString());
-    auto sectionIndex = crossectedCoordinate(section.toStdString());
+    auto outSectionAxes = sectionAxes(section);
+    auto sectionIndex = crossectedCoordinate(section);
 
-    offset[sectionIndex]=x;
+    int xi = round(tran.transformAxisInv(sectionIndex,x));
+    xi=min(xi,size[sectionIndex]-1);
+    xi=max(xi,0);
+
+
+    offset[sectionIndex]=xi;
     for(auto i : outSectionAxes)
         count[i]=size[i];
 
@@ -270,7 +278,7 @@ DensitySection DensityData::extractSection(QString section, int x) {
     free(rebinnedDataBuffer);
 
 
-    DensitySection res(data,rsize,tran.getSection(section.toStdString(), x),section.toStdString());
+    DensitySection res(data,rsize,tran.getSection(section, xi),section);
     extractSectionMemo={section,x,res};
     return res;
 }
@@ -279,4 +287,16 @@ DensitySection DensityData::extractSection(QString section, int x) {
 
 vector<double> DensityData::ind2hkl(const vector<int> & indices) {
     return tran(indices);
+}
+
+double DensityData::lowerLimit(int i) {
+    return lowerLimits[i];
+}
+
+double DensityData::upperLimit(int i) {
+    return lowerLimits[i]+stepSizes[i]*size[i];
+}
+
+double DensityData::stepSize(int i) {
+    return stepSizes[i];
 }
