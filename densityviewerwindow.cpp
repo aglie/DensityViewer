@@ -61,21 +61,11 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     colorSaturation->setSingleStep(10);
     colorSaturation->setValue(255);
 
+    controllerBar->addWidget(new QLabel("Color saturation"));
     connect(colorSaturation,
             static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
             [=](int val) {densityViewer->setColorSaturation(val);});
     controllerBar->addWidget(colorSaturation);
-
-
-    controllerBar->addWidget(new QLabel("X="));
-    auto sectionIndex = new QSpinBox;
-    sectionIndex->setMaximum(densityViewer->data.size[2]);
-    sectionIndex->setSingleStep(1);
-    sectionIndex->setValue(0);
-
-    connect(sectionIndex, SIGNAL(valueChanged(int)),densityViewer, SLOT(setSectionIndex(int)));
-
-    controllerBar->addWidget(sectionIndex);
 
     auto sectionComboBox = new QComboBox;
     sectionComboBox->addItem(tr("hkx"));
@@ -87,6 +77,20 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
             [=](QString sec){densityViewer->setSectionDirection( sec );});
 
     controllerBar->addWidget(sectionComboBox);
+
+    auto xStretch = new QHBoxLayout;
+    xStretch->addWidget(new QLabel("x="));
+    auto sectionIndex = new QSpinBox;
+    sectionIndex->setMaximum(densityViewer->data.size[2]);
+    sectionIndex->setSingleStep(1);
+    sectionIndex->setValue(0);
+
+    connect(sectionIndex, SIGNAL(valueChanged(int)),densityViewer, SLOT(setSectionIndex(int)));
+
+    xStretch->addWidget(sectionIndex);
+    controllerBar->addLayout(xStretch);
+
+
 
     auto gridOn = new QCheckBox("grid");
 

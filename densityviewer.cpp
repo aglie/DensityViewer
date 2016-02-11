@@ -66,11 +66,14 @@ void DensityViewer::initSpecifics() {
     showGrid=true;
     setInteractionMode(DensityViewerInteractionMode::pan);
     drawZoomRect = false;
-    margin=50;
+    marginLeft=50;
+    marginRight=2;
+    marginTop=30;
+    marginBottom=50;
     zoom = 1;
     x_pos = 0;
     y_pos = 0;
-    currentSection = data.extractSection(currentSectionDirection,sectionIndex);
+    updateSection();
     goHome();
 }
 
@@ -120,7 +123,7 @@ vector<double> makeTicks(double llvis, double ulvis, double lldset, double uldse
     else if(minStepSize<= 2*pixStepSize)
         stepSize = 2*pixStepSize;
     else {
-        stepSize=sensibleStepSizes[0];
+        stepSize=sensibleStepSizes[0]; //TODO: rewrite with find_if???
         for(auto sz : sensibleStepSizes)
             if(sz<=minStepSize)
                 stepSize=sz;
@@ -206,30 +209,18 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
 {
     QPainter painter(this);
 
-    currentSection = data.extractSection(currentSectionDirection,sectionIndex);
-    QImage image(currentSection.size[0], currentSection.size[1], QImage::Format_RGB32);
-
-    for(int i=0; i<currentSection.size[0]; ++i)
-        for(int j=0; j<currentSection.size[1]; ++j) {
-            auto v = currentSection.at(i,j);
-            image.setPixel(i, j, falseColor(v,Colormap::blackToRed,{-colorSaturation,colorSaturation},ColormapInterpolation::linear));
-        }
-
     painter.setRenderHint(QPainter::Antialiasing, true);
     auto imTransform=imageTransform();
     painter.setWorldTransform(imageTransform());
-    painter.drawImage(0,0,image);
+    painter.drawImage(0,0,sectionImage);
 
     // The axes start
     auto sz = size();
 
-    //auto pen = QPen(Qt::blue, 2, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin);
 
-    //    //painter.setBrush(brush);
-
-    QRect visibleArea(margin, 0, sz.width(), sz.height()-margin);
+    QRect pa = plottingArea();
     //figure out the x coordinates of the visible area rectangle
-    QPolygon visibleAreaImCoord = imTransform.inverted().map(QPolygon(visibleArea));
+    QPolygon visibleAreaImCoord = imTransform.inverted().map(QPolygon(pa));
 
 
     auto getComponent = [](const QPoint & p, int coord) {
@@ -240,6 +231,8 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
     };
 
     auto generateTicks = [&](int axisN){
+
+        //TODO: change implementation to use bounding Rect
         vector<double> boundaryPointProjections;
         for(int i=0; i<visibleAreaImCoord.size(); ++i) {
             const auto p = visibleAreaImCoord.point(i);
@@ -279,7 +272,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
               [&](double xtick){
         //Not very beautiful since in this place there is double transformation happens
                 auto xpos = currentSection.tran.transformAxisInv(0,xtick);
-                return gridTransform.map(QLineF(QPointF(xpos,10000),(QPointF(xpos,-10000))));});
+                return gridTransform.map(QLineF(QPointF(xpos,-10000),(QPointF(xpos,10000))));});
 
 
     vector<QLineF> yTickLines(yticks.size());
@@ -301,18 +294,23 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
     painter.setPen(Qt::NoPen);
     painter.setBrush(QBrush(Qt::white));
 
-    painter.drawRect(QRect(0, 0, margin, sz.height()));
-    painter.drawRect(QRect(0, sz.height()-margin, sz.width(), sz.height()));
+    //Drawing margins
+    painter.drawPolygon(QPolygon(QRect(0,0,width(),height())).subtracted(pa));
+
+    //Draw figure title
+    painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+    painter.drawText(QRect(pa.left(),0,pa.width(),pa.top()),Qt::AlignHCenter | Qt::AlignVCenter,"hkx");
+    //currentSection
 
     // Figure out the positions and draw the tick labels
     painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
 
     double tickMargin = 5;
-    auto lowerImageBorder = QLineF(margin,sz.height()-margin,sz.width(),sz.height()-margin);
+    auto lowerImageBorder = QLineF(pa.bottomLeft(),pa.bottomRight());
     auto xTickGuideline = lowerImageBorder;
     xTickGuideline.translate(0,tickMargin);
 
-    auto leftImageBorder = QLineF(margin,0,margin,sz.height()-margin);
+    auto leftImageBorder = QLineF(pa.bottomLeft(),pa.topLeft());
     auto yTickGuideline = leftImageBorder;
     yTickGuideline.translate(-tickMargin,0);
 
@@ -322,15 +320,11 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
     drawTicks(lowerImageBorder,xTickLines,painter);
     drawTicks(leftImageBorder ,yTickLines,painter);
 
-
     painter.setPen(QPen(Qt::black,2, Qt::SolidLine));
-    if(false) {
-        painter.drawLine(margin,0,margin,sz.height()-margin);
-        painter.drawLine(margin,sz.height()-margin,sz.width(),sz.height()-margin);
-    } else {
-        painter.setBrush(Qt::NoBrush);
-        painter.drawRect(margin,1,sz.width()-margin-1,sz.height()-margin);
-    }
+
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(pa.adjusted(-1,-1,1,1));
+
 
     if(drawZoomRect) {
         painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
@@ -448,17 +442,18 @@ void DensityViewer::setInteractionMode(DensityViewerInteractionMode m) {
 
 void DensityViewer::setColorSaturation(double inp) {
     colorSaturation=inp;
-    update();
+    pixelateSection();
 }
 
 void DensityViewer::setSectionIndex(int inp) {
     sectionIndex=inp;
-    update();
+    updateSection();
 }
 
 void DensityViewer::setSectionDirection(QString inp) {
     currentSectionDirection = inp;
-    update();
+    updateSection();
+    goHome();
 }
 
 void DensityViewer::setGrid(bool inp) {
@@ -467,7 +462,7 @@ void DensityViewer::setGrid(bool inp) {
 }
 
 QRect DensityViewer::plottingArea() {
-    return QRect(margin,1,size().width()-margin-1,size().height()-margin);
+    return QRect (marginLeft, marginTop, width()-marginLeft-marginRight, height()-marginTop-marginBottom);
 }
 
 void DensityViewer::zoomTo(QRectF target) {
@@ -489,4 +484,20 @@ QRectF DensityViewer::contentsBoundingRect() {
 
 void DensityViewer::goHome() {
     zoomTo(contentsBoundingRect());
+}
+
+void DensityViewer::pixelateSection() {
+    sectionImage = QImage(currentSection.size[0], currentSection.size[1], QImage::Format_RGB32);
+
+    for(int i=0; i<currentSection.size[0]; ++i)
+        for(int j=0; j<currentSection.size[1]; ++j) {
+            auto v = currentSection.at(i,j);
+            sectionImage.setPixel(i, j, falseColor(v,Colormap::blackToRed,{-colorSaturation,colorSaturation},ColormapInterpolation::linear));
+        }
+    update();
+}
+
+void DensityViewer::updateSection() {
+    currentSection = data.extractSection(currentSectionDirection,sectionIndex);
+    pixelateSection();
 }

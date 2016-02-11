@@ -79,8 +79,11 @@ private:
     void mouseMoveEvent(QMouseEvent * event) Q_DECL_OVERRIDE;
     void mousePressEvent(QMouseEvent * event) Q_DECL_OVERRIDE;
     void mouseReleaseEvent(QMouseEvent * event) Q_DECL_OVERRIDE;
-    int margin;
+    int marginTop, marginBottom, marginLeft, marginRight;
 
+    void updateSection();
+    void pixelateSection();
+    QImage sectionImage;
 
 protected:
     void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE;
