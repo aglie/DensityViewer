@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <sstream>
 #include <cmath>
+#include <QMatrix4x4>
 
 vector<int> xComesFirst(const string& section) {
     vector<int> res;
@@ -189,8 +190,31 @@ A readConstant(H5File f, const string& datasetName) {
     return res[0];
 }
 
-//template<Type A,
+double deg2rad(double a) {
+    return a/180*M_PI;
+}
 
+vector<vector<double>> metricTensorFromUnitCell(const vector<double>& unitCell, bool invert) {
+    double a = unitCell[0];
+    double b = unitCell[1];
+    double c = unitCell[2];
+    double alpha = deg2rad(unitCell[3]);
+    double beta  = deg2rad(unitCell[4]);
+    double gamma = deg2rad(unitCell[5]);
+    QMatrix4x4 t (a*a, a*b*cos(gamma), a*c*cos(beta),0,
+                    b*a*cos(gamma),b*b, b*c*cos(alpha),0,
+                    c*a*cos(beta),c*b*cos(alpha),c*c,0,
+                   0,0,0,1);
+    if(invert)
+        t=t.inverted();
+
+    auto tt=t.data();
+    return {{tt[0], tt[1], tt[2]},
+            {tt[4],tt[5], tt[6]},
+            {tt[8],tt[9],tt[10]}};
+}
+
+//template<Type A,
 DensityData::DensityData(string filename) {
 
     //TODO: Here check file format string. currently missing
@@ -205,28 +229,27 @@ DensityData::DensityData(string filename) {
                        FileCreatPropList::DEFAULT,
                        readProps);
 
-    rebinnedData = dataFile.openDataSet("rebinned_data");
-    noPixRebinned = dataFile.openDataSet( "number_of_pixels_rebinned" );
+    data = dataFile.openDataSet("data");
+    //rebinnedData = dataFile.openDataSet("rebinned_data");
+    //noPixRebinned = dataFile.openDataSet( "number_of_pixels_rebinned" );
 
     //Read dataset and crystal data
     isDirect = readConstant<bool>(dataFile, "is_direct");
 
-    lowerLimits = readVector<double,3>(dataFile,"maxind");
-    for(auto & ll : lowerLimits)
-        ll=-ll;
+    lowerLimits = readVector<double,3>(dataFile,"lower_limits");
     stepSizes = readVector<double, 3>(dataFile, "step_size");
     unitCell = readVector<double, 6>(dataFile, "unit_cell");
-    metricTensor = readMatrix<double, 3, 3>(dataFile, "metric_tensor");
+    metricTensor = metricTensorFromUnitCell(unitCell, isDirect);
 
     tran = OrthogonalTransformation(lowerLimits,stepSizes,metricTensor);
 
-    DSetCreatPropList cparms = rebinnedData.getCreatePlist();
+    DSetCreatPropList cparms = data.getCreatePlist();
 //    hsize_t chunk_dims[3];
 //    int rank_chunk = cparms.getChunk( 3, chunk_dims);
 
 
     hsize_t datasetDimesions[3];
-    rebinnedData.getSpace().getSimpleExtentDims( datasetDimesions, NULL);
+    data.getSpace().getSimpleExtentDims( datasetDimesions, NULL);
 
     size = vector<int>(begin(datasetDimesions), end(datasetDimesions));
 }
@@ -255,10 +278,10 @@ DensitySection DensityData::extractSection(string section, double x) {
 
     rsize=vector<double> {(double)count[outSectionAxes[0]],(double) count[outSectionAxes[1]]};
 
-    int * noPixBuffer = (int*) malloc(sizeof(int)*rsize[0]*rsize[1]);
-    double * rebinnedDataBuffer = (double*) malloc(sizeof(double)*rsize[0]*rsize[1]);
+    //int * noPixBuffer = (int*) malloc(sizeof(int)*rsize[0]*rsize[1]);
+    double * dataBuffer = (double*) malloc(sizeof(double)*rsize[0]*rsize[1]);
 
-    DataSpace dataspace = noPixRebinned.getSpace();
+    DataSpace dataspace = data.getSpace();
     dataspace.selectHyperslab( H5S_SELECT_SET, count, offset );
 
     hsize_t     sectionSize[2]={(hsize_t)rsize[0],(hsize_t) rsize[1]};
@@ -267,19 +290,19 @@ DensitySection DensityData::extractSection(string section, double x) {
     hsize_t      offset_out[2]={0,0};
     memspace.selectHyperslab( H5S_SELECT_SET, sectionSize, offset_out );
 
-    noPixRebinned.read( noPixBuffer, PredType::NATIVE_INT, memspace, dataspace );
-    rebinnedData.read( rebinnedDataBuffer, PredType::NATIVE_DOUBLE, memspace, dataspace );
+    data.read(dataBuffer, PredType::NATIVE_DOUBLE, memspace, dataspace);
+//    noPixRebinned.read( noPixBuffer, PredType::NATIVE_INT, memspace, dataspace );
+//    rebinnedData.read( rebinnedDataBuffer, PredType::NATIVE_DOUBLE, memspace, dataspace );
 
-    data = vector<double>(rsize[0]*rsize[1]);
+    vector<double> sectionData(rsize[0]*rsize[1]);
     for(int i=0; i<rsize[0]*rsize[1]; ++i)
-        data[i]=rebinnedDataBuffer[i]/noPixBuffer[i];
+        sectionData[i]=dataBuffer[i];
 
-    free(noPixBuffer);
-    free(rebinnedDataBuffer);
+    free(dataBuffer);
+    //free(rebinnedDataBuffer);
 
-
-    DensitySection res(data,rsize,tran.getSection(section, xi),section);
-    extractSectionMemo={section,x,res};
+    DensitySection res(sectionData, rsize, tran.getSection(section, xi), section);
+    extractSectionMemo={section, x, res};
     return res;
 }
 

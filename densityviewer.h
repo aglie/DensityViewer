@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QMouseEvent>
 #include "densitydata.h"
+#include "colormap.h"
 
 using namespace std;
 
@@ -11,8 +12,6 @@ namespace Ui {
 class DensityViewer;
 }
 
-enum class Colormap {blackToRed};
-enum class ColormapInterpolation {nearest, linear};
 enum class DensityViewerInteractionMode {info, pan, zoom};
 
 class DensityViewer : public QWidget
@@ -42,6 +41,7 @@ public slots:
     void setInteractionMode(DensityViewerInteractionMode m);
     void zoomTo(QRectF);
     void goHome();
+    void setColormap(QString);
 
 signals:
     void changedSectionDirection();
@@ -84,6 +84,8 @@ private:
     void updateSection();
     void pixelateSection();
     QImage sectionImage;
+
+    Colormap colormap;
 
 protected:
     void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE;

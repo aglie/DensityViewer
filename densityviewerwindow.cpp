@@ -9,6 +9,7 @@
 
 #include <QComboBox>
 #include <QCheckBox>
+#include "colormap.h"
 
 QString hkl2str(vector<double> hkl) {
     ostringstream res;
@@ -73,6 +74,16 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
             static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
             [=](int val) {densityViewer->setColorSaturation(val);});
     controllerBar->addWidget(colorSaturation);
+
+    //http://forum.qt.io/topic/17409/solved-qt-4-7-qcombobox-custom-item-delegate-doesn-t-affect-the-current-item-displayed/3
+
+    auto colormapComboBox = new QComboBox;
+    for (const auto& cmap : Colormap::AvailableColormaps )
+        colormapComboBox->addItem(QString::fromStdString(cmap.first));
+
+    connect(colormapComboBox,SIGNAL(activated(QString)),densityViewer,SLOT(setColormap(QString)));
+
+    controllerBar->addWidget(colormapComboBox);
 
     auto sectionComboBox = new QComboBox;
     sectionComboBox->addItem(tr("hkx"));

@@ -10,57 +10,24 @@
 #include <algorithm>
 #include <QLineF>
 #include <sstream>
+#include "colormap.h"
+#include <QString>
 
-double fractional(double x)
-{
-    double intpart;
-    auto fractpart = modf (x , &intpart);
-    return fractpart;
-}
 
 QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterpolation interpolation) {
     assert(clims[0]<=clims[1]);
     if(isnan(data))
         data=0;
 
-    double trimmedData = (data-clims[0])/(clims[1]-clims[0]);
-
-    trimmedData = min(1.,trimmedData);
-    trimmedData = max(0.,trimmedData);
-
-    vector<int> colormap;
-    switch(cmap) {
-        case Colormap::blackToRed:
-            colormap = {102,2,32,255,255,255,31,31,31};
-            break;
-        default:
-            assert(false);//die
-    }
-
-    double color = trimmedData*(colormap.size()/3-1);
-
-    switch(interpolation) {
-        case ColormapInterpolation::nearest: {
-            int idx = (int)round(color);
-            return qRgb(colormap[3*idx],colormap[3*idx+1],colormap[3*idx+2]);
-        }
-        case ColormapInterpolation::linear: {
-            int lidx = (int)floor(color);
-            int uidx = (int)ceil(color);
-            double a = fractional(color);
-
-            return qRgb((1-a)*colormap[3*lidx]+a*colormap[3*uidx],
-                        (1-a)*colormap[3*lidx+1]+a*colormap[3*uidx+1],
-                        (1-a)*colormap[3*lidx+2]+a*colormap[3*uidx+2]);
-        }
-    }
-
+    return cmap.getColor((data-clims[0])/(clims[1]-clims[0]),interpolation);
 }
 
 
 DensityViewer::DensityViewer(QWidget *parent) :
     QWidget(parent),
-    data("/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction.h5")
+    //data("/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction.h5")
+    data("/Users/arkadiy/ag/yell/yell playground/delta-pdf.h5"),
+    colormap(Colormap::BrewerBlackToRed)
 {
     colorSaturation = 255;
     sectionIndex=0;
@@ -87,7 +54,7 @@ DensityViewer::~DensityViewer()
 }
 
 QTransform DensityViewer::imageTransform() {
-    QTransform tran(1,0,0,-1,0,0);
+    QTransform tran;
 
     //in place 2d cholesky decomposition
     const auto & m = currentSection.tran.metricTensor;
@@ -100,8 +67,9 @@ QTransform DensityViewer::imageTransform() {
 
     tran.translate(x_pos,y_pos);
     tran.translate(-pa.center().x(),-pa.center().y());
-    tran*=QTransform(a,0,b*cosab,b*sinab,0,0).inverted();
+    tran*=QTransform(a,0,b*cosab,b*sinab,0,0);
     tran*=QTransform(zoom,0,0,zoom,0,0);
+    tran*=QTransform(1,0,0,-1,0,0);
 
     tran*=QTransform(1,0,0,1,pa.center().x(),pa.center().y());
 
@@ -111,7 +79,9 @@ QTransform DensityViewer::imageTransform() {
 vector<double> makeTicks(double llvis, double ulvis, double lldset, double uldset, double minStepSize, double pixStepSize) {
     //Decide on pixel size
     double stepSize;
-    vector<double> sensibleStepSizes = {0.0001,0.0002,0.0005,0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.125,0.2,0.25,0.5,1,2,5,10,15,20,25,50,100,200,500,1000,2000,5000};
+    vector<double> sensibleStepSizes = {0.0001,0.0002,0.0005,0.001,0.002,0.005,
+                                        0.01,0.02,0.05,0.1,0.125,0.2,0.25,0.5,
+                                        1,2,5,10,15,20,25,50,100,200,500,1000,2000,5000};
     if(minStepSize<=pixStepSize)
         stepSize = pixStepSize;
     else if(minStepSize<= 2*pixStepSize)
@@ -486,7 +456,7 @@ void DensityViewer::pixelateSection() {
     for(int i=0; i<currentSection.size[0]; ++i)
         for(int j=0; j<currentSection.size[1]; ++j) {
             auto v = currentSection.at(i,j);
-            sectionImage.setPixel(i, j, falseColor(v,Colormap::blackToRed,{-colorSaturation,colorSaturation},ColormapInterpolation::linear));
+            sectionImage.setPixel(i, j, falseColor(v, colormap, {-colorSaturation,colorSaturation}, ColormapInterpolation::nearest));
         }
     update();
 }
@@ -495,4 +465,9 @@ void DensityViewer::updateSection() {
     currentSection = data.extractSection(currentSectionDirection.toStdString(),sectionIndex);
     pixelateSection();
     emit changedSectionDirection();
+}
+
+void DensityViewer::setColormap(QString cmap) {
+    colormap = Colormap::AvailableColormaps.at(cmap.toStdString());
+    pixelateSection();
 }

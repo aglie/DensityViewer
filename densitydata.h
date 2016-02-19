@@ -62,7 +62,7 @@ class DensityData
 {
 public:
     DensityData(string filename);
-    vector<double> data;
+
     vector<int> size; //TODO: change to size type, not double
     DensitySection extractSection(string section, double x);
     struct extractSectionMemoStruc {
@@ -72,14 +72,15 @@ public:
     };
     extractSectionMemoStruc extractSectionMemo;
 
-    double at(int x, int y, int z) {return data[(x*size[1]+y)*size[2]+z];}
+    //vector<double> data;
+    //double at(int x, int y, int z) {return data[(x*size[1]+y)*size[2]+z];}
     vector<double> ind2hkl(const vector<int> & indices);
     double lowerLimit(int i);
     double upperLimit(int i);
     double stepSize(int i);
 private:
     H5File dataFile;
-    DataSet rebinnedData, noPixRebinned;
+    DataSet rebinnedData, noPixRebinned, data;
 
     bool isDirect;
     vector<double> lowerLimits;

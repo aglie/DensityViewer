@@ -15,11 +15,13 @@ TEMPLATE = app
 SOURCES += main.cpp\
         densityviewer.cpp \
     densityviewerwindow.cpp \
-    densitydata.cpp
+    densitydata.cpp \
+    colormap.cpp
 
 HEADERS  += densityviewer.h \
     densityviewerwindow.h \
-    densitydata.h
+    densitydata.h \
+    colormap.h
 
 
 
