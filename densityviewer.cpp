@@ -34,7 +34,7 @@ DensityViewer::DensityViewer(QWidget *parent) :
     colorSaturation = 255;
     sectionIndex=0;
     currentSectionDirection = "hkx";
-    showGrid=true;
+    showGrid=false;
     setInteractionMode(DensityViewerInteractionMode::pan);
     drawZoomRect = false;
     marginLeft=50;

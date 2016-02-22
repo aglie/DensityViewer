@@ -24,9 +24,9 @@ private slots:
     void initControls();
     void fillInHKX();
     void openFile();
-
+    void updateProgramTitle();
 private:
-
+    QString currentFile;
     QComboBox* sectionComboBox;
     DensityViewer * densityViewer;
     QDoubleSpinBox * sectionIndex;

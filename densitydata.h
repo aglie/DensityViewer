@@ -11,6 +11,13 @@ using namespace std;
 
 vector<string> axesNames(bool direct);
 
+class UnknownFormat : std::exception {
+public:
+    UnknownFormat() {}
+    ~UnknownFormat() throw() {}
+};
+
+
 class OrthogonalTransformation {
 public:
     OrthogonalTransformation() {}

@@ -225,6 +225,22 @@ vector<vector<double>> metricTensorFromUnitCell(const vector<double>& unitCell, 
             {tt[8],tt[9],tt[10]}};
 }
 
+void checkFileFormat(H5File& file) {
+    std::string format;
+    try {
+    StrType datatype(0, H5T_VARIABLE);
+    DataSpace dataspace(H5S_SCALAR);
+    DataSet datset = file.openDataSet("format");
+
+    datset.read(format, datatype, dataspace);
+    } catch(H5::FileIException) {
+        throw(UnknownFormat());
+    }
+
+    if(format!="Yell 1.0")
+        throw(UnknownFormat());
+}
+
 //template<Type A,
 DensityData::DensityData(string filename) {
 
@@ -234,11 +250,13 @@ DensityData::DensityData(string filename) {
     size_t rdcc_nelmts, rdcc_nbytes;
     double rdcc_w0;
     readProps.getCache(mdc_nelmts, rdcc_nelmts, rdcc_nbytes, rdcc_w0);
-    readProps.setCache(mdc_nelmts, 269251, 1024*1024*500, rdcc_w0); //Magic numbers here
+    readProps.setCache(mdc_nelmts, 269251, 1024*1024*500, rdcc_w0); //Magic numbers to tune performance
     dataFile = H5File( filename,
                        H5F_ACC_RDONLY,
                        FileCreatPropList::DEFAULT,
                        readProps);
+
+    checkFileFormat(dataFile);
 
     data = dataFile.openDataSet("data");
     //rebinnedData = dataFile.openDataSet("rebinned_data");
@@ -250,9 +268,9 @@ DensityData::DensityData(string filename) {
     lowerLimits = readVector<double,3>(dataFile,"lower_limits");
     stepSizes = readVector<double, 3>(dataFile, "step_size");
     unitCell = readVector<double, 6>(dataFile, "unit_cell");
-    metricTensor = metricTensorFromUnitCell(unitCell, true);
+    metricTensor = metricTensorFromUnitCell(unitCell, !isDirect);
 
-    tran = OrthogonalTransformation(lowerLimits,stepSizes,metricTensor);
+    tran = OrthogonalTransformation(lowerLimits, stepSizes, metricTensor);
 
     DSetCreatPropList cparms = data.getCreatePlist();
 //    hsize_t chunk_dims[3];

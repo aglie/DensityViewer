@@ -16,12 +16,31 @@
 #include <QMenuBar>
 #include <QFileDialog>
 #include <QDir>
+#include <QErrorMessage>
+
+void DensityViewerWindow::updateProgramTitle() {
+    if(currentFile=="")
+        setWindowTitle("Viewer");
+    else
+        setWindowTitle("Viewer: " + QDir::toNativeSeparators(currentFile));
+}
 
 void DensityViewerWindow::openFile() {
     auto filename = QFileDialog::getOpenFileName(this,
-         "Open dataset", QDir::currentPath(), "Yell files (*.h5)");
+         "Open dataset", QDir::currentPath() , "Yell files (*.h5)");
 
-    densityViewer->loadDensityData(filename);
+    //
+    try {
+        densityViewer->loadDensityData(filename);
+    } catch (UnknownFormat) {
+      auto error = new QErrorMessage(this);
+      error->showMessage("File cannot be opened because it is in unknown format.");
+      return;
+    }
+
+    currentFile = filename;
+    QDir::setCurrent(QDir(filename).path());
+    updateProgramTitle();
 }
 
 void DensityViewerWindow::setXLimits() {
@@ -51,6 +70,7 @@ void DensityViewerWindow::initControls() {
 
     fillInHKX();
     setXLimits();
+    updateProgramTitle();
 }
 
 DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
@@ -132,7 +152,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
     auto gridOn = new QCheckBox("grid");
 
-    gridOn->setChecked(true);
+    gridOn->setChecked(false);
     connect(gridOn,SIGNAL(clicked(bool)),densityViewer,SLOT(setGrid(bool)));
 
     controllerBar->addWidget(gridOn);
