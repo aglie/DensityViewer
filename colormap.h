@@ -39,16 +39,15 @@ public:
         }
     }
 
-
-    static const Colormap BrewerGreenToBrown;
+    static const Colormap BrewerBrownToGreen;
     static const Colormap BrewerGreenToPink;
     static const Colormap BrewerGreenToPurple;
-    static const Colormap BrewerPurpleToOrange;
-    static const Colormap BrewerBlueToRed;
+    static const Colormap BrewerOrangeToPurple;
+    static const Colormap BrewerRedToBlue;
     static const Colormap BrewerBlackToRed;
-    static const Colormap BrewerBlueYellowRed;
-    static const Colormap BrewerGreenYellowRed;
-    static const Colormap BrewerBlueGreenYellowRed;
+    static const Colormap BrewerRedYellowBlue;
+    static const Colormap BrewerRedYellowGreen;
+    static const Colormap BrewerRedYellowGreenBlue;
 
     static const map<string, const Colormap& > AvailableColormaps;
 private:

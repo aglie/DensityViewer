@@ -12,6 +12,7 @@
 #include <sstream>
 #include "colormap.h"
 #include <QString>
+#include <iomanip>
 
 
 QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterpolation interpolation) {
@@ -118,6 +119,7 @@ void drawTickLables(QLineF & guideLine, vector<double> &xticks, vector<QLineF> &
         guideLine.intersect(*xTickLine,&drawPoint);
 
         ostringstream res;
+        res << std::setprecision(4);
         res << *xtick;
         auto formatted = QString::fromStdString(res.str());
         double textMaxLen=50;
@@ -220,7 +222,6 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
                                 minStepSize,
                                 currentSection.tran.stepSizes[axisN]);
     };
-
 
     painter.setWorldTransform(QTransform());
 

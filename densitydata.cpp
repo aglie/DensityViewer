@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cmath>
 #include <QMatrix4x4>
+#include <iomanip>
 
 vector<int> xComesFirst(const string& section) {
     vector<int> res;
@@ -118,6 +119,7 @@ double DensitySection::upperLimit(int axisN) {
 string DensitySection::title() {
     vector<string> res={"h","k","l"};
     ostringstream t;
+    t << std::setprecision(4);
     t<<tran({0,0})[sectionDir];
     res[sectionDir] = t.str();
     return res[0]+res[1]+res[2];

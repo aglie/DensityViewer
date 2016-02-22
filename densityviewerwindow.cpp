@@ -6,6 +6,7 @@
 #include <QWidget>
 #include <QTextEdit>
 #include <sstream>
+#include <iomanip>
 
 #include <QComboBox>
 #include <QCheckBox>
@@ -13,6 +14,7 @@
 
 QString hkl2str(vector<double> hkl) {
     ostringstream res;
+    res << std::setprecision(3);
     res << "h=" << hkl[0] << " k=" << hkl[1] << " l=" << hkl[2];
     return QString::fromStdString(res.str());
 }
