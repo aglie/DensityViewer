@@ -9,6 +9,8 @@ using namespace H5;
 
 using namespace std;
 
+vector<string> axesNames(bool direct);
+
 class OrthogonalTransformation {
 public:
     OrthogonalTransformation() {}
@@ -42,7 +44,8 @@ public:
     DensitySection(vector<double> inp_data,
                    vector<double> inp_size,
                    OrthogonalTransformation inp_tran,
-                   string section);
+                   string section,
+                   bool isDirect);
     vector<double> size;
     vector<double> data;
     double at(int x, int y) {return data[x*size[1]+y];}
@@ -52,7 +55,9 @@ public:
     OrthogonalTransformation tran;
     string title();
     int sectionDir;
+
 private:
+    bool isDirect;
     vector<int> axisDirs;
 
     int x;
@@ -61,6 +66,7 @@ private:
 class DensityData
 {
 public:
+    DensityData() {};
     DensityData(string filename);
 
     vector<int> size; //TODO: change to size type, not double
@@ -78,11 +84,11 @@ public:
     double lowerLimit(int i);
     double upperLimit(int i);
     double stepSize(int i);
+    bool isDirect;
 private:
     H5File dataFile;
     DataSet rebinnedData, noPixRebinned, data;
 
-    bool isDirect;
     vector<double> lowerLimits;
     vector<double> stepSizes;
     vector<vector<double> > metricTensor;

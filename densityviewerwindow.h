@@ -5,6 +5,7 @@
 #include <densityviewer.h>
 #include <QLabel>
 #include <QSpinBox>
+#include <QComboBox>
 
 namespace Ui {
 class DensityViewerWindow;
@@ -20,10 +21,16 @@ public:
 
 private slots:
     void setXLimits();
+    void initControls();
+    void fillInHKX();
+    void openFile();
 
 private:
+
+    QComboBox* sectionComboBox;
     DensityViewer * densityViewer;
     QDoubleSpinBox * sectionIndex;
+    QSpinBox* colorSaturation;
     Ui::DensityViewerWindow *ui;
     QLabel * coordinateCursor;
 };

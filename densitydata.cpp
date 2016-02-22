@@ -89,16 +89,17 @@ OrthogonalTransformation OrthogonalTransformation::getSection(
 }
 
 
-DensitySection::DensitySection(
-        vector<double> inp_data,
+DensitySection::DensitySection(vector<double> inp_data,
         vector<double> inp_size,
         OrthogonalTransformation inp_tran,
-        string section):
+        string section,
+        bool inpIsDirect):
     size{inp_size},
     data{inp_data},
     tran{inp_tran},
     axisDirs{sectionAxes(section)},
-    sectionDir{crossectedCoordinate(section)}
+    sectionDir{crossectedCoordinate(section)},
+    isDirect{inpIsDirect}
 { }
 
 vector<double> DensitySection::ind2hkl(const vector<int> & indices) {
@@ -116,8 +117,16 @@ double DensitySection::upperLimit(int axisN) {
     return tran(t)[axisDirs[axisN]];
 }
 
+vector<string> axesNames(bool direct) {
+    if(direct)
+        return {"u","v","w"};
+    else
+        return {"h","k","l"};
+}
+
 string DensitySection::title() {
-    vector<string> res={"h","k","l"};
+    vector<string> res = axesNames(isDirect);
+
     ostringstream t;
     t << std::setprecision(4);
     t<<tran({0,0})[sectionDir];
@@ -187,7 +196,7 @@ A readConstant(H5File f, const string& datasetName) {
     DataSpace dataspace = dataset.getSpace();
     assert(dataspace.getSimpleExtentNdims()==0);
 
-    dataset.read( res, getH5Type<A>());
+    dataset.read(res, getH5Type<A>());
 
     return res[0];
 }
@@ -211,8 +220,8 @@ vector<vector<double>> metricTensorFromUnitCell(const vector<double>& unitCell, 
         t=t.inverted();
 
     auto tt=t.data();
-    return {{tt[0], tt[1], tt[2]},
-            {tt[4],tt[5], tt[6]},
+    return {{tt[0],tt[1],tt[2]},
+            {tt[4],tt[5],tt[6]},
             {tt[8],tt[9],tt[10]}};
 }
 
@@ -241,7 +250,7 @@ DensityData::DensityData(string filename) {
     lowerLimits = readVector<double,3>(dataFile,"lower_limits");
     stepSizes = readVector<double, 3>(dataFile, "step_size");
     unitCell = readVector<double, 6>(dataFile, "unit_cell");
-    metricTensor = metricTensorFromUnitCell(unitCell, isDirect);
+    metricTensor = metricTensorFromUnitCell(unitCell, true);
 
     tran = OrthogonalTransformation(lowerLimits,stepSizes,metricTensor);
 
@@ -303,7 +312,7 @@ DensitySection DensityData::extractSection(string section, double x) {
     free(dataBuffer);
     //free(rebinnedDataBuffer);
 
-    DensitySection res(sectionData, rsize, tran.getSection(section, xi), section);
+    DensitySection res(sectionData, rsize, tran.getSection(section, xi), section, isDirect);
     extractSectionMemo={section, x, res};
     return res;
 }

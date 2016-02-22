@@ -42,12 +42,16 @@ public slots:
     void zoomTo(QRectF);
     void goHome();
     void setColormap(QString);
+    void loadDensityData(QString);
 
 signals:
+    void loadedDensityData(DensityData &);
     void changedSectionDirection();
-    void dataCursorMoved(int x, int y, vector<double> hkl);
+    void dataCursorMoved(int x, int y, vector<double> hkl, string text);
 
 private:
+    bool dataIsInitialised;
+
     DensityViewerInteractionMode interactionMode;
 
     struct panState {
@@ -71,7 +75,7 @@ private:
     double x_pos, y_pos;
     double colorSaturation;
     double sectionIndex; //position in hkx like things
-    QString currentSectionDirection;
+    string currentSectionDirection;
     QTransform imageTransform();
     bool showGrid;
     QRectF contentsBoundingRect();

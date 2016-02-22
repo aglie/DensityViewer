@@ -13,6 +13,7 @@
 #include "colormap.h"
 #include <QString>
 #include <iomanip>
+#include <map>
 
 
 QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterpolation interpolation) {
@@ -27,8 +28,8 @@ QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterp
 DensityViewer::DensityViewer(QWidget *parent) :
     QWidget(parent),
     //data("/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction.h5")
-    data("/Users/arkadiy/ag/yell/yell playground/delta-pdf.h5"),
-    colormap(Colormap::BrewerBlackToRed)
+    colormap(Colormap::BrewerBlackToRed),
+    dataIsInitialised(false)
 {
     colorSaturation = 255;
     sectionIndex=0;
@@ -43,8 +44,6 @@ DensityViewer::DensityViewer(QWidget *parent) :
     zoom = 1;
     x_pos = 0;
     y_pos = 0;
-    updateSection();
-    goHome();
 
     //ui->setupUi(this);
 }
@@ -175,126 +174,134 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
 {
     QPainter painter(this);
 
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    auto imTransform=imageTransform();
-    painter.setWorldTransform(imageTransform());
-    painter.drawImage(0,0,sectionImage);
+    if(!dataIsInitialised)
+    {
+        painter.drawText(this->rect(),Qt::AlignHCenter | Qt::AlignVCenter, "Data will appear here.");
 
-    // The axes start
-    auto sz = size();
-
-
-    QRect pa = plottingArea();
-    //figure out the x coordinates of the visible area rectangle
-    QPolygon visibleAreaImCoord = imTransform.inverted().map(QPolygon(pa));
-
-
-    auto getComponent = [](const QPoint & p, int coord) {
-        if(coord == 0)
-            return p.x();
-        else
-            return p.y();
-    };
-
-    auto generateTicks = [&](int axisN){
-
-        //TODO: change implementation to use bounding Rect
-        vector<double> boundaryPointProjections;
-        for(int i=0; i<visibleAreaImCoord.size(); ++i) {
-            const auto p = visibleAreaImCoord.point(i);
-            boundaryPointProjections.push_back(currentSection.tran.transformAxis(axisN, getComponent(p,axisN)));
-        }
-
-        const int minimumSeparationBetweenTicks = 150; //pixels
-        vector<int> farMostPoint(2,0);
-        farMostPoint[axisN]=currentSection.size[axisN];
-        auto axisStretch = imTransform.map(QLineF(0,0,farMostPoint[0],farMostPoint[1]));
-
-        auto ll=currentSection.lowerLimit(axisN);
-        auto ul=currentSection.upperLimit(axisN);
-
-        auto minStepSize = minimumSeparationBetweenTicks/axisStretch.length()*(ul-ll);
-
-        return makeTicks(amin(boundaryPointProjections),
-                                amax(boundaryPointProjections),
-                                ll,
-                                ul,
-                                minStepSize,
-                                currentSection.tran.stepSizes[axisN]);
-    };
-
-    painter.setWorldTransform(QTransform());
-
-    auto gridTransform=imTransform;
-    gridTransform.translate(0.5,0.5);
-
-    auto xticks = generateTicks(0);
-    auto yticks = generateTicks(1);
-
-    vector<QLineF> xTickLines(xticks.size());
-    transform(begin(xticks),end(xticks),
-              begin(xTickLines),
-              [&](double xtick){
-        //Not very beautiful since in this place there is double transformation happens
-                auto xpos = currentSection.tran.transformAxisInv(0,xtick);
-                return gridTransform.map(QLineF(QPointF(xpos,-10000),(QPointF(xpos,10000))));});
-
-
-    vector<QLineF> yTickLines(yticks.size());
-    transform(begin(yticks),end(yticks),begin(yTickLines),[&](double ytick){
-        auto ypos = currentSection.tran.transformAxisInv(1,ytick);
-        return gridTransform.map(QLineF(QPointF(-1000,ypos),QPointF( 1000,ypos)));});
-
-
-    if(showGrid) {
-        painter.setPen(QPen(Qt::blue,1, Qt::DashLine));
-        for (auto line : xTickLines) {
-            painter.drawLine(line);
-        }
-        for (auto line : yTickLines) {
-            painter.drawLine(line);
-        }
     }
+    else
+    {
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        auto imTransform=imageTransform();
+        painter.setWorldTransform(imageTransform());
+        painter.drawImage(0,0,sectionImage);
 
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(QBrush(Qt::white));
-
-    //Drawing margins
-    painter.drawPolygon(QPolygon(QRect(0,0,width(),height())).subtracted(pa));
-
-    //Draw figure title
-    painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
-    painter.drawText(QRect(pa.left(),0,pa.width(),pa.top()),Qt::AlignHCenter | Qt::AlignVCenter, QString::fromStdString(currentSection.title()));
-    //currentSection
-
-    // Figure out the positions and draw the tick labels
-    painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
-
-    double tickMargin = 5;
-    auto lowerImageBorder = QLineF(pa.bottomLeft(),pa.bottomRight());
-    auto xTickGuideline = lowerImageBorder;
-    xTickGuideline.translate(0,tickMargin);
-
-    auto leftImageBorder = QLineF(pa.bottomLeft(),pa.topLeft());
-    auto yTickGuideline = leftImageBorder;
-    yTickGuideline.translate(-tickMargin,0);
-
-    drawTickLables(xTickGuideline, xticks, xTickLines, painter, "top-middle");
-    drawTickLables(yTickGuideline, yticks, yTickLines, painter, "middle-left");
-
-    drawTicks(lowerImageBorder,xTickLines,painter);
-    drawTicks(leftImageBorder ,yTickLines,painter);
-
-    painter.setPen(QPen(Qt::black,2, Qt::SolidLine));
-
-    painter.setBrush(Qt::NoBrush);
-    painter.drawRect(pa.adjusted(-1,-1,1,1));
+        // The axes start
+        auto sz = size();
 
 
-    if(drawZoomRect) {
+        QRect pa = plottingArea();
+        //figure out the x coordinates of the visible area rectangle
+        QPolygon visibleAreaImCoord = imTransform.inverted().map(QPolygon(pa));
+
+
+        auto getComponent = [](const QPoint & p, int coord) {
+            if(coord == 0)
+                return p.x();
+            else
+                return p.y();
+        };
+
+        auto generateTicks = [&](int axisN){
+
+            //TODO: change implementation to use bounding Rect
+            vector<double> boundaryPointProjections;
+            for(int i=0; i<visibleAreaImCoord.size(); ++i) {
+                const auto p = visibleAreaImCoord.point(i);
+                boundaryPointProjections.push_back(currentSection.tran.transformAxis(axisN, getComponent(p,axisN)));
+            }
+
+            const int minimumSeparationBetweenTicks = 150; //pixels
+            vector<int> farMostPoint(2,0);
+            farMostPoint[axisN]=currentSection.size[axisN];
+            auto axisStretch = imTransform.map(QLineF(0,0,farMostPoint[0],farMostPoint[1]));
+
+            auto ll=currentSection.lowerLimit(axisN);
+            auto ul=currentSection.upperLimit(axisN);
+
+            auto minStepSize = minimumSeparationBetweenTicks/axisStretch.length()*(ul-ll);
+
+            return makeTicks(amin(boundaryPointProjections),
+                                    amax(boundaryPointProjections),
+                                    ll,
+                                    ul,
+                                    minStepSize,
+                                    currentSection.tran.stepSizes[axisN]);
+        };
+
+        painter.setWorldTransform(QTransform());
+
+        auto gridTransform=imTransform;
+        gridTransform.translate(0.5,0.5);
+
+        auto xticks = generateTicks(0);
+        auto yticks = generateTicks(1);
+
+        vector<QLineF> xTickLines(xticks.size());
+        transform(begin(xticks),end(xticks),
+                  begin(xTickLines),
+                  [&](double xtick){
+            //Not very beautiful since in this place there is double transformation happens
+                    auto xpos = currentSection.tran.transformAxisInv(0,xtick);
+                    return gridTransform.map(QLineF(QPointF(xpos,-10000),(QPointF(xpos,10000))));});
+
+
+        vector<QLineF> yTickLines(yticks.size());
+        transform(begin(yticks),end(yticks),begin(yTickLines),[&](double ytick){
+            auto ypos = currentSection.tran.transformAxisInv(1,ytick);
+            return gridTransform.map(QLineF(QPointF(-1000,ypos),QPointF( 1000,ypos)));});
+
+
+        if(showGrid) {
+            painter.setPen(QPen(Qt::blue,1, Qt::DashLine));
+            for (auto line : xTickLines) {
+                painter.drawLine(line);
+            }
+            for (auto line : yTickLines) {
+                painter.drawLine(line);
+            }
+        }
+
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QBrush(Qt::white));
+
+        //Drawing margins
+        painter.drawPolygon(QPolygon(QRect(0,0,width(),height())).subtracted(pa));
+
+        //Draw figure title
         painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+        painter.drawText(QRect(pa.left(),0,pa.width(),pa.top()),Qt::AlignHCenter | Qt::AlignVCenter, QString::fromStdString(currentSection.title()));
+        //currentSection
+
+        // Figure out the positions and draw the tick labels
+        painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+
+        double tickMargin = 5;
+        auto lowerImageBorder = QLineF(pa.bottomLeft(),pa.bottomRight());
+        auto xTickGuideline = lowerImageBorder;
+        xTickGuideline.translate(0,tickMargin);
+
+        auto leftImageBorder = QLineF(pa.bottomLeft(),pa.topLeft());
+        auto yTickGuideline = leftImageBorder;
+        yTickGuideline.translate(-tickMargin,0);
+
+        drawTickLables(xTickGuideline, xticks, xTickLines, painter, "top-middle");
+        drawTickLables(yTickGuideline, yticks, yTickLines, painter, "middle-left");
+
+        drawTicks(lowerImageBorder,xTickLines,painter);
+        drawTicks(leftImageBorder ,yTickLines,painter);
+
+        painter.setPen(QPen(Qt::black,2, Qt::SolidLine));
+
         painter.setBrush(Qt::NoBrush);
-        painter.drawRect(QRect(zoomRectEnd,zoomRectStart));
+        painter.drawRect(pa.adjusted(-1,-1,1,1));
+
+
+        if(drawZoomRect) {
+            painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRect(QRect(zoomRectEnd,zoomRectStart));
+        }
     }
 
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -342,6 +349,7 @@ void DensityViewer::mousePressEvent(QMouseEvent * event) {
     }
 }
 
+
 void DensityViewer::mouseMoveEvent(QMouseEvent * event) {
     auto pos = event->pos();
 
@@ -361,9 +369,16 @@ void DensityViewer::mouseMoveEvent(QMouseEvent * event) {
         break;
     }
     case DensityViewerInteractionMode::info : {
-        emit dataCursorMoved(pos.x(),
-                             pos.y(),
-                             pix2hkl(pos.x(),pos.y()));
+        auto x=pos.x(), y=pos.y();
+        auto hkl=pix2hkl(x,y);
+
+        vector<string> hklNames = axesNames(data.isDirect);
+
+        ostringstream res;
+        res << std::setprecision(3);
+        res << hklNames[0] << "=" << hkl[0] << " " << hklNames[1] << "=" << hkl[1] << " " << hklNames[2] << "=" << hkl[2];
+
+        emit dataCursorMoved(x,y,hkl,res.str());
         break;
     }
     }
@@ -416,7 +431,14 @@ void DensityViewer::setSectionIndex(double inp) {
 }
 
 void DensityViewer::setSectionDirection(QString inp) {
-    currentSectionDirection = inp;
+    const map<string, string> synonims = {{"hkx","hkx"},
+                                          {"hxl","hxl"},
+                                          {"xkl","xkl"},
+                                          {"uvx","hkx"},
+                                          {"uxw","hxl"},
+                                          {"xvw","xkl"}};
+
+    currentSectionDirection = synonims.at(inp.toStdString());
     updateSection();
     goHome();
 }
@@ -463,7 +485,7 @@ void DensityViewer::pixelateSection() {
 }
 
 void DensityViewer::updateSection() {
-    currentSection = data.extractSection(currentSectionDirection.toStdString(),sectionIndex);
+    currentSection = data.extractSection(currentSectionDirection,sectionIndex);
     pixelateSection();
     emit changedSectionDirection();
 }
@@ -471,4 +493,13 @@ void DensityViewer::updateSection() {
 void DensityViewer::setColormap(QString cmap) {
     colormap = Colormap::AvailableColormaps.at(cmap.toStdString());
     pixelateSection();
+}
+
+void DensityViewer::loadDensityData(QString filename) {
+    data = DensityData(filename.toStdString());
+    dataIsInitialised = true;
+    updateSection();
+    goHome();
+
+    emit loadedDensityData(data);
 }
