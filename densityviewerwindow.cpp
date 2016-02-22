@@ -29,7 +29,9 @@ void DensityViewerWindow::openFile() {
     auto filename = QFileDialog::getOpenFileName(this,
          "Open dataset", QDir::currentPath() , "Yell files (*.h5)");
 
-    //
+    if(filename=="")
+        return;
+
     try {
         densityViewer->loadDensityData(filename);
     } catch (UnknownFormat) {
@@ -39,7 +41,12 @@ void DensityViewerWindow::openFile() {
     }
 
     currentFile = filename;
-    QDir::setCurrent(QDir(filename).path());
+    auto p = QDir(filename);
+    p.cdUp();
+
+    QDir::setCurrent(p.path());
+    auto pp = QDir::currentPath();
+    currentFile = p.path()+"->"+pp;
     updateProgramTitle();
 }
 
