@@ -190,13 +190,15 @@ vector<A> readVector(H5File f, const string& datasetName) {
 
 template<typename A>
 A readConstant(H5File f, const string& datasetName) {
-    A res[1];
+    //Due to (probably) bug, dataset.read overwrites two values for a scalar
+    //don't have time to trace it
+    A res[2];
 
     DataSet dataset = f.openDataSet(datasetName);
     DataSpace dataspace = dataset.getSpace();
     assert(dataspace.getSimpleExtentNdims()==0);
 
-    dataset.read(res, getH5Type<A>());
+    dataset.read(res, getH5Type<A>(),DataSpace(H5S_SCALAR),DataSpace(H5S_SCALAR));
 
     return res[0];
 }
