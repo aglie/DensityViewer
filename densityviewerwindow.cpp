@@ -221,7 +221,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     mainLayout->setSpacing(0);
 
     //For debug purposes
-    densityViewer->loadDensityData("/Users/arkadiy/ag/yell/yell playground/delta-pdf.h5");
+    //densityViewer->loadDensityData("/Users/arkadiy/ag/yell/yell playground/delta-pdf.h5");
 
 }
 

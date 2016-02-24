@@ -1,8 +1,8 @@
 #ifndef DENSITYDATA_H
 #define DENSITYDATA_H
 
-#import <vector>
-#import <QString>
+#include <vector>
+#include <QString>
 
 #include "H5Cpp.h"
 using namespace H5;

@@ -18,7 +18,7 @@
 
 QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterpolation interpolation) {
     assert(clims[0]<=clims[1]);
-    if(isnan(data))
+    if(std::isnan(data))
         data=0;
 
     return cmap.getColor((data-clims[0])/(clims[1]-clims[0]),interpolation);
