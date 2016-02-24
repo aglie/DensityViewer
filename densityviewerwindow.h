@@ -21,10 +21,11 @@ public:
 
 private slots:
     void setXLimits();
-    void initControls();
+    void updateControls();
     void fillInHKX();
     void openFile();
     void updateProgramTitle();
+    void updateDataset();
 private:
     QString currentFile;
     QComboBox* sectionComboBox;

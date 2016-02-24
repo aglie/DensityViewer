@@ -495,11 +495,18 @@ void DensityViewer::setColormap(QString cmap) {
     pixelateSection();
 }
 
-void DensityViewer::loadDensityData(QString filename) {
+
+void DensityViewer::loadDensityData(QString filename, bool gohome) {
     data = DensityData(filename.toStdString());
     dataIsInitialised = true;
     updateSection();
-    goHome();
+    if(gohome)
+        goHome();
 
     emit loadedDensityData(data);
 }
+
+void DensityViewer::updateDataset(QString filename) {
+    loadDensityData(filename, false);
+}
+

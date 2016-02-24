@@ -45,9 +45,17 @@ void DensityViewerWindow::openFile() {
     p.cdUp();
 
     QDir::setCurrent(p.path());
-    auto pp = QDir::currentPath();
-    currentFile = p.path()+"->"+pp;
     updateProgramTitle();
+}
+
+void DensityViewerWindow::updateDataset() {
+    try {
+        densityViewer->updateDataset(currentFile);
+    } catch (UnknownFormat) {
+      auto error = new QErrorMessage(this);
+      error->showMessage("File cannot be opened because it is in unknown format.");
+      return;
+    }
 }
 
 void DensityViewerWindow::setXLimits() {
@@ -69,11 +77,9 @@ void DensityViewerWindow::fillInHKX() {
     }
 }
 
-void DensityViewerWindow::initControls() {
+void DensityViewerWindow::updateControls() {
     //TODO: figure out the maximum value from the maximum value of the data
-    colorSaturation->setMaximum(INFINITY);
-    colorSaturation->setSingleStep(1);
-    colorSaturation->setValue(255);
+
 
     fillInHKX();
     setXLimits();
@@ -91,10 +97,10 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
     auto controllerBar = new QVBoxLayout;
 
-    auto plusButton = new QPushButton(" + ");
-    connect(plusButton,&QPushButton::clicked,[=](bool){densityViewer->changeZoom(1.1);});
-    auto minusButton = new QPushButton(" – ");
-    connect(minusButton,&QPushButton::clicked,[=](bool){densityViewer->changeZoom(1./1.1);});
+    auto plusButton = new QPushButton("zoom in");
+    connect(plusButton,&QPushButton::clicked,[=](bool){densityViewer->changeZoom(1.2);});
+    auto minusButton = new QPushButton("zoom out");
+    connect(minusButton,&QPushButton::clicked,[=](bool){densityViewer->changeZoom(1./1.2);});
     auto plusMinus = new QHBoxLayout;
 
     plusMinus->addWidget(minusButton);
@@ -102,25 +108,10 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
     controllerBar->addLayout(plusMinus);
 
-    const auto disip_ampl = 100;
-    auto upButton = new QPushButton("↑");
-    connect(upButton,&QPushButton::clicked,[=](bool){densityViewer->pan(0,-disip_ampl);});
-    auto leftButton = new QPushButton("←");
-    connect(leftButton,&QPushButton::clicked,[=](bool){densityViewer->pan(-disip_ampl,0);});
-    auto rightButton = new QPushButton("→");
-    connect(rightButton,&QPushButton::clicked,[=](bool){densityViewer->pan(disip_ampl,0);});
-    auto downButton = new QPushButton("↓");
-    connect(downButton,&QPushButton::clicked,[=](bool){densityViewer->pan(0,disip_ampl);});
-
-    controllerBar->addWidget(upButton);
-    auto leftRightButtons = new QHBoxLayout;
-    leftRightButtons->addWidget(leftButton);
-    leftRightButtons->addWidget(rightButton);
-    controllerBar->addLayout(leftRightButtons);
-    controllerBar->addWidget(downButton);
-
-
     colorSaturation = new QSpinBox;
+    colorSaturation->setMaximum(INFINITY);
+    colorSaturation->setSingleStep(1);
+    colorSaturation->setValue(255);
 
     controllerBar->addWidget(new QLabel("Color saturation"));
     connect(colorSaturation,
@@ -189,6 +180,12 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
             SLOT(goHome()));
     controllerBar->addWidget(homeButton);
 
+    auto updateButton = new QPushButton("update");
+    connect(updateButton,
+            SIGNAL(pressed()),
+            this,
+            SLOT(updateDataset()));
+    controllerBar->addWidget(updateButton);
 
     controllerBar->addStretch();
 
@@ -204,7 +201,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     connect(densityViewer,
             SIGNAL(loadedDensityData(DensityData&)),
             this,
-            SLOT(initControls()));
+            SLOT(updateControls()));
 
     //Context menu
     auto openDataset = new QAction("&Open dataset", this);

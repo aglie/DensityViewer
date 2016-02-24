@@ -42,7 +42,8 @@ public slots:
     void zoomTo(QRectF);
     void goHome();
     void setColormap(QString);
-    void loadDensityData(QString);
+    void loadDensityData(QString,bool gohome=true);
+    void updateDataset(QString);
 
 signals:
     void loadedDensityData(DensityData &);
