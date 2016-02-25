@@ -25,13 +25,101 @@ QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterp
 }
 
 
+namespace DensityViewerInstruments {
+
+DoNothing::DoNothing(DensityViewer* p) :
+    DensityViewerInteractionInstrument(p)
+{
+    parent->setMouseTracking(false);
+}
+
+Pan::Pan(DensityViewer* p) :
+    DensityViewerInteractionInstrument(p),
+    panning(false)
+{
+    parent->setMouseTracking(false);
+}
+void Pan::onMousePress(QMouseEvent * event) {
+    auto pos = event->pos();
+    if(panning) {
+        parent->pan(pos.x()-lastPos.x(),pos.y()-lastPos.y());
+        lastPos=pos;
+    }
+}
+void Pan::onMouseMove(QMouseEvent * event) {
+    auto pos = event->pos();
+    if(panning) {
+        parent->pan(pos.x()-lastPos.x(),pos.y()-lastPos.y());
+        lastPos=pos;
+    }
+}
+
+void Pan::onMouseRelease(QMouseEvent * event) {
+    auto pos = event->pos();
+
+    parent->pan(pos.x()-lastPos.x(),pos.y()-lastPos.y());
+    panning=false;
+}
+
+Zoom::Zoom(DensityViewer* p) :
+    DensityViewerInteractionInstrument(p),
+    zoomStarted(false),
+    drawZoomRect(false)
+{
+    parent->setMouseTracking(false);
+}
+void Zoom::onMousePress(QMouseEvent * event) {
+    zoomRectStart = event->pos();
+}
+void Zoom::onMouseMove(QMouseEvent * event) {
+    drawZoomRect = true;
+    zoomRectEnd = event->pos();
+    parent->update();
+}
+void Zoom::onMouseRelease(QMouseEvent * event) {
+    auto pos = event->pos();
+
+    drawZoomRect = false;
+    parent->zoomTo(QRect(zoomRectStart, pos));
+}
+
+void Zoom::paint(QPainter & painter) {
+    painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(QRect(zoomRectEnd,zoomRectStart));
+}
+
+
+
+Info::Info(DensityViewer* p) :
+    DensityViewerInteractionInstrument(p)
+{
+    parent->setMouseTracking(true);
+}
+void Info::onMouseMove(QMouseEvent * event) {
+    auto pos = event->pos();
+
+    auto x=pos.x(), y=pos.y();
+    auto hkl=parent->pix2hkl(x,y);
+
+    string hklNames = axesNames(parent->data.isDirect);
+
+    ostringstream res;
+    res << std::setprecision(3);
+    res << hklNames[0] << "=" << hkl[0] << " " << hklNames[1] << "=" << hkl[1] << " " << hklNames[2] << "=" << hkl[2];
+
+    emit parent->dataCursorMoved(x,y,hkl,res.str());
+}
+}
+
+
 DensityViewer::DensityViewer(QWidget *parent) :
     QWidget(parent),
     //data("/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction.h5")
     colormap(Colormap::BrewerBlackToRed),
     dataIsInitialised(false)
 {
-    colorSaturation = 255;
+    colorSaturation = 100;
     sectionIndex=0;
     currentSectionDirection = "hkx";
     showGrid=false;

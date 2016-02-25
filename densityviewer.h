@@ -12,6 +12,61 @@ namespace Ui {
 class DensityViewer;
 }
 
+class DensityViewer;
+
+namespace DensityViewerInstruments {
+class DensityViewerInteractionInstrument {
+public:
+    DensityViewerInteractionInstrument (DensityViewer* p): parent(p) {}
+    virtual void onMouseMove(QMouseEvent *) {}
+    virtual void onMousePress(QMouseEvent *) {}
+    virtual void onMouseRelease(QMouseEvent *) {}
+    virtual void paint(QPainter &) {}
+
+    virtual ~DensityViewerInteractionInstrument() {}
+protected:
+    DensityViewer* parent;
+};
+
+class DoNothing : DensityViewerInteractionInstrument {
+    DoNothing(DensityViewer* p);
+    ~DoNothing() {}
+};
+
+class Pan : DensityViewerInteractionInstrument {
+    Pan(DensityViewer* p);
+    void onMousePress(QMouseEvent * event);
+    void onMouseMove(QMouseEvent * event);
+    void onMouseRelease(QMouseEvent * event);
+
+    ~Pan() {}
+private:
+    bool panning;
+    QPoint lastPos;
+};
+
+class Zoom : DensityViewerInteractionInstrument {
+    Zoom(DensityViewer* p);
+    void onMousePress(QMouseEvent * event);
+    void onMouseMove(QMouseEvent * event);
+    void onMouseRelease(QMouseEvent * event);
+    void paint(QPainter &);
+
+    ~Zoom() {}
+private:
+    bool zoomStarted, drawZoomRect;
+    QPoint zoomRectStart, zoomRectEnd;
+
+};
+
+class Info : DensityViewerInteractionInstrument {
+    Info(DensityViewer* p);
+    ~Info() {}
+    void onMouseMove(QMouseEvent * event);
+};
+
+}
+
 enum class DensityViewerInteractionMode {info, pan, zoom};
 
 class DensityViewer : public QWidget
