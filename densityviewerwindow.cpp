@@ -107,15 +107,16 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
     controllerBar->addLayout(plusMinus);
 
-    colorSaturation = new QSpinBox;
+    colorSaturation = new QDoubleSpinBox;
     colorSaturation->setMaximum(INFINITY);
     colorSaturation->setSingleStep(1);
-    colorSaturation->setValue(255);
+    colorSaturation->setValue(100);
 
     controllerBar->addWidget(new QLabel("Color saturation"));
     connect(colorSaturation,
-            static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
-            [=](int val) {densityViewer->setColorSaturation(val);});
+            SIGNAL(valueChanged(double)),
+            densityViewer,
+            SLOT(setColorSaturation(double)));
     controllerBar->addWidget(colorSaturation);
 
     //http://forum.qt.io/topic/17409/solved-qt-4-7-qcombobox-custom-item-delegate-doesn-t-affect-the-current-item-displayed/3

@@ -31,7 +31,7 @@ private:
     QComboBox* sectionComboBox;
     DensityViewer * densityViewer;
     QDoubleSpinBox * sectionIndex;
-    QSpinBox* colorSaturation;
+    QDoubleSpinBox* colorSaturation;
     Ui::DensityViewerWindow *ui;
     QLabel * coordinateCursor;
 };
