@@ -9,7 +9,7 @@ using namespace H5;
 
 using namespace std;
 
-vector<string> axesNames(bool direct);
+string axesNames(bool direct);
 
 class UnknownFormat : std::exception {
 public:

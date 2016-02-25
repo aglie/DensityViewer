@@ -117,21 +117,22 @@ double DensitySection::upperLimit(int axisN) {
     return tran(t)[axisDirs[axisN]];
 }
 
-vector<string> axesNames(bool direct) {
+string axesNames(bool direct) {
     if(direct)
-        return {"u","v","w"};
+        return "uvw";
     else
-        return {"h","k","l"};
+        return "hkl";
 }
 
 string DensitySection::title() {
-    vector<string> res = axesNames(isDirect);
+    string res = axesNames(isDirect);
 
     ostringstream t;
     t << std::setprecision(4);
     t<<tran({0,0})[sectionDir];
-    res[sectionDir] = t.str();
-    return res[0]+res[1]+res[2];
+
+    res.replace(sectionDir,1,t.str());
+    return res;
 }
 
 template<typename T>

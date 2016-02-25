@@ -372,7 +372,7 @@ void DensityViewer::mouseMoveEvent(QMouseEvent * event) {
         auto x=pos.x(), y=pos.y();
         auto hkl=pix2hkl(x,y);
 
-        vector<string> hklNames = axesNames(data.isDirect);
+        string hklNames = axesNames(data.isDirect);
 
         ostringstream res;
         res << std::setprecision(3);

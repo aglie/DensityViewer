@@ -66,8 +66,7 @@ void DensityViewerWindow::setXLimits() {
 }
 
 void DensityViewerWindow::fillInHKX() {
-    auto t = axesNames(densityViewer->data.isDirect);
-    string hkl = t[0]+t[1]+t[2];
+    string hkl = axesNames(densityViewer->data.isDirect);
 
     sectionComboBox->clear();
     for (int i : {2,1,0}) {
