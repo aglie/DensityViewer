@@ -5,6 +5,7 @@
 #include <QMouseEvent>
 #include "densitydata.h"
 #include "colormap.h"
+#include <memory>
 
 using namespace std;
 
@@ -28,12 +29,14 @@ protected:
     DensityViewer* parent;
 };
 
-class DoNothing : DensityViewerInteractionInstrument {
+class DoNothing : public DensityViewerInteractionInstrument {
+public:
     DoNothing(DensityViewer* p);
     ~DoNothing() {}
 };
 
-class Pan : DensityViewerInteractionInstrument {
+class Pan : public DensityViewerInteractionInstrument {
+public:
     Pan(DensityViewer* p);
     void onMousePress(QMouseEvent * event);
     void onMouseMove(QMouseEvent * event);
@@ -45,7 +48,8 @@ private:
     QPoint lastPos;
 };
 
-class Zoom : DensityViewerInteractionInstrument {
+class Zoom : public DensityViewerInteractionInstrument {
+public:
     Zoom(DensityViewer* p);
     void onMousePress(QMouseEvent * event);
     void onMouseMove(QMouseEvent * event);
@@ -54,12 +58,13 @@ class Zoom : DensityViewerInteractionInstrument {
 
     ~Zoom() {}
 private:
-    bool zoomStarted, drawZoomRect;
+    bool drawZoomRect;
     QPoint zoomRectStart, zoomRectEnd;
 
 };
 
-class Info : DensityViewerInteractionInstrument {
+class Info : public DensityViewerInteractionInstrument {
+public:
     Info(DensityViewer* p);
     ~Info() {}
     void onMouseMove(QMouseEvent * event);
@@ -67,7 +72,7 @@ class Info : DensityViewerInteractionInstrument {
 
 }
 
-enum class DensityViewerInteractionMode {info, pan, zoom};
+enum class DensityViewerInteractionMode {nothing, info, pan, zoom};
 
 class DensityViewer : public QWidget
 {
@@ -108,25 +113,8 @@ signals:
 private:
     bool dataIsInitialised;
 
-    DensityViewerInteractionMode interactionMode;
+    unique_ptr<DensityViewerInstruments::DensityViewerInteractionInstrument> interactionInstrument;
 
-    struct panState {
-        bool panning;
-        QPoint lastPos;
-    };
-    panState p;
-
-    struct zoomState {
-        bool zoomStarted;
-        QPoint zoomRectStart;
-    };
-    zoomState z;
-
-    bool drawZoomRect;
-    QPoint zoomRectStart;
-    QPoint zoomRectEnd;
-
-//    Ui::DensityViewer *ui;
     double zoom;
     double x_pos, y_pos;
     double colorSaturation;

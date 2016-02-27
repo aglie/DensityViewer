@@ -40,11 +40,8 @@ Pan::Pan(DensityViewer* p) :
     parent->setMouseTracking(false);
 }
 void Pan::onMousePress(QMouseEvent * event) {
-    auto pos = event->pos();
-    if(panning) {
-        parent->pan(pos.x()-lastPos.x(),pos.y()-lastPos.y());
-        lastPos=pos;
-    }
+    panning = true;
+    lastPos=event->pos();
 }
 void Pan::onMouseMove(QMouseEvent * event) {
     auto pos = event->pos();
@@ -63,7 +60,6 @@ void Pan::onMouseRelease(QMouseEvent * event) {
 
 Zoom::Zoom(DensityViewer* p) :
     DensityViewerInteractionInstrument(p),
-    zoomStarted(false),
     drawZoomRect(false)
 {
     parent->setMouseTracking(false);
@@ -84,9 +80,11 @@ void Zoom::onMouseRelease(QMouseEvent * event) {
 }
 
 void Zoom::paint(QPainter & painter) {
-    painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
-    painter.setBrush(Qt::NoBrush);
-    painter.drawRect(QRect(zoomRectEnd,zoomRectStart));
+    if(drawZoomRect) {
+        painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(QRect(zoomRectEnd,zoomRectStart));
+    }
 }
 
 
@@ -116,15 +114,15 @@ void Info::onMouseMove(QMouseEvent * event) {
 DensityViewer::DensityViewer(QWidget *parent) :
     QWidget(parent),
     //data("/Users/arkadiy/ag/josh/Diffuse/Crystal2/xds/reconstruction.h5")
+    dataIsInitialised(false),
     colormap(Colormap::BrewerBlackToRed),
-    dataIsInitialised(false)
+    interactionInstrument(new DensityViewerInstruments::DoNothing(this))
 {
     colorSaturation = 100;
     sectionIndex=0;
     currentSectionDirection = "hkx";
     showGrid=false;
     setInteractionMode(DensityViewerInteractionMode::pan);
-    drawZoomRect = false;
     marginLeft=50;
     marginRight=2;
     marginTop=30;
@@ -148,6 +146,8 @@ QTransform DensityViewer::imageTransform() {
     const auto & m = currentSection.tran.metricTensor;
     double a = sqrt(m[0][0]);
     double b = sqrt(m[1][1]);
+    double sa = currentSection.tran.stepSizes[0];
+    double sb = currentSection.tran.stepSizes[1];
     double cosab = m[0][1]/(a*b);
     double sinab = sqrt(1-cosab*cosab);
 
@@ -155,7 +155,7 @@ QTransform DensityViewer::imageTransform() {
 
     tran.translate(x_pos,y_pos);
     tran.translate(-pa.center().x(),-pa.center().y());
-    tran*=QTransform(a,0,b*cosab,b*sinab,0,0);
+    tran*=QTransform(a*sa,0,sb*b*cosab,sb*b*sinab,0,0);
     tran*=QTransform(zoom,0,0,zoom,0,0);
     tran*=QTransform(1,0,0,-1,0,0);
 
@@ -275,7 +275,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
         painter.drawImage(0,0,sectionImage);
 
         // The axes start
-        auto sz = size();
+
 
 
         QRect pa = plottingArea();
@@ -385,11 +385,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
         painter.drawRect(pa.adjusted(-1,-1,1,1));
 
 
-        if(drawZoomRect) {
-            painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
-            painter.setBrush(Qt::NoBrush);
-            painter.drawRect(QRect(zoomRectEnd,zoomRectStart));
-        }
+        interactionInstrument->paint(painter);
     }
 
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -424,86 +420,38 @@ vector<double> DensityViewer::pix2hkl(double x_screen, double y_screen) {
 }
 
 void DensityViewer::mousePressEvent(QMouseEvent * event) {
-    switch(interactionMode) {
-    case DensityViewerInteractionMode::pan : {
-        p.panning=true;
-        p.lastPos=event->pos();
-        break;
-    }
-    case DensityViewerInteractionMode::zoom : {
-        z.zoomRectStart = event->pos();
-        break;
-    }
-    }
+    interactionInstrument->onMousePress(event);
 }
 
 
 void DensityViewer::mouseMoveEvent(QMouseEvent * event) {
-    auto pos = event->pos();
-
-    switch(interactionMode) {
-    case DensityViewerInteractionMode::pan : {
-        if(p.panning) {
-            pan(pos.x()-p.lastPos.x(),pos.y()-p.lastPos.y());
-            p.lastPos=pos;
-        }
-        break;
-    }
-    case DensityViewerInteractionMode::zoom : {
-        drawZoomRect = true;
-        zoomRectStart = z.zoomRectStart;
-        zoomRectEnd = event->pos();
-        update();
-        break;
-    }
-    case DensityViewerInteractionMode::info : {
-        auto x=pos.x(), y=pos.y();
-        auto hkl=pix2hkl(x,y);
-
-        string hklNames = axesNames(data.isDirect);
-
-        ostringstream res;
-        res << std::setprecision(3);
-        res << hklNames[0] << "=" << hkl[0] << " " << hklNames[1] << "=" << hkl[1] << " " << hklNames[2] << "=" << hkl[2];
-
-        emit dataCursorMoved(x,y,hkl,res.str());
-        break;
-    }
-    }
-
+    interactionInstrument->onMouseMove(event);
 }
 
 void DensityViewer::mouseReleaseEvent(QMouseEvent * event) {
-    auto pos = event->pos();
-    switch(interactionMode) {
-    case DensityViewerInteractionMode::pan : {
-        pan(pos.x()-p.lastPos.x(),pos.y()-p.lastPos.y());
-        p.panning=false;
-        break;
-    }
-    case DensityViewerInteractionMode::zoom : {
-        drawZoomRect = false;
-        zoomTo(QRect(z.zoomRectStart, pos));
-        break;
-    }
-    }
+    interactionInstrument->onMouseRelease(event);
 }
 
-void DensityViewer::setInteractionMode(DensityViewerInteractionMode m) {
-    interactionMode = m;
+void DensityViewer::setInteractionMode(DensityViewerInteractionMode interactionMode) {
+    if(!dataIsInitialised)
+        interactionMode = DensityViewerInteractionMode::nothing;
+
     switch(interactionMode) {
     case DensityViewerInteractionMode::pan : {
-        p.panning=false;
-        setMouseTracking(false);
+        interactionInstrument.reset(new DensityViewerInstruments::Pan(this));
         break;
     }
     case DensityViewerInteractionMode::zoom : {
-        z.zoomStarted=false;
-        setMouseTracking(false);
+        interactionInstrument.reset(new DensityViewerInstruments::Zoom(this));
         break;
     }
     case DensityViewerInteractionMode::info : {
-        setMouseTracking(true);
+        interactionInstrument.reset(new DensityViewerInstruments::Info(this));
+        break;
+    }
+    case DensityViewerInteractionMode::nothing : {
+        interactionInstrument.reset(new DensityViewerInstruments::DoNothing(this));
+        break;
     }
     }
 }

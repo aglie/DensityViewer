@@ -208,7 +208,10 @@ double deg2rad(double a) {
     return a/180*M_PI;
 }
 
-vector<vector<double>> metricTensorFromUnitCell(const vector<double>& unitCell, bool invert) {
+vector<vector<double>> metricTensorFromUnitCell(
+        const vector<double>& unitCell,
+        bool invert)
+{
     double a = unitCell[0];
     double b = unitCell[1];
     double c = unitCell[2];
