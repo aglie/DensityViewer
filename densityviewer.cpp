@@ -126,7 +126,7 @@ DensityViewer::DensityViewer(QWidget *parent) :
     marginLeft=50;
     marginRight=2;
     marginTop=30;
-    marginBottom=50;
+    marginBottom=30;
     zoom = 1;
     x_pos = 0;
     y_pos = 0;

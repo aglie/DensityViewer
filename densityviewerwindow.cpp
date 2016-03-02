@@ -79,6 +79,10 @@ void DensityViewerWindow::fillInHKX() {
 void DensityViewerWindow::updateControls() {
     //TODO: figure out the maximum value from the maximum value of the data
 
+    sectionIndex->setEnabled(true);
+    colorSaturation->setEnabled(true);
+    sectionComboBox->setEnabled(true);
+    colormapComboBox->setEnabled(true);
 
     fillInHKX();
     setXLimits();
@@ -111,6 +115,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     colorSaturation->setMaximum(INFINITY);
     colorSaturation->setSingleStep(1);
     colorSaturation->setValue(100);
+    colorSaturation->setEnabled(false);
 
     controllerBar->addWidget(new QLabel("Color saturation"));
     connect(colorSaturation,
@@ -121,7 +126,8 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
     //http://forum.qt.io/topic/17409/solved-qt-4-7-qcombobox-custom-item-delegate-doesn-t-affect-the-current-item-displayed/3
 
-    auto colormapComboBox = new QComboBox;
+    colormapComboBox = new QComboBox;
+    colormapComboBox->setEnabled(false);
     for (const auto& cmap : Colormap::AvailableColormaps )
         colormapComboBox->addItem(QString::fromStdString(cmap.first));
 
@@ -129,7 +135,10 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
     controllerBar->addWidget(colormapComboBox);
 
+    controllerBar->addWidget(new QLabel("Select section:"));
     sectionComboBox = new QComboBox;
+
+    sectionComboBox->setEnabled(false);
 
     connect(sectionComboBox,
             static_cast<void (QComboBox::*)(const QString &)>(&QComboBox::activated),
@@ -141,6 +150,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     xStretch->addWidget(new QLabel("x="));
     sectionIndex = new QDoubleSpinBox;
     sectionIndex->setValue(0);
+    sectionIndex->setEnabled(false);
 
     connect(sectionIndex, SIGNAL(valueChanged(double)),densityViewer, SLOT(setSectionIndex(double)));
     connect(densityViewer, SIGNAL(changedSectionDirection()),this,SLOT(setXLimits()));

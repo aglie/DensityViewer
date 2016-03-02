@@ -272,7 +272,7 @@ DensityData::DensityData(string filename) {
     isDirect = readConstant<bool>(dataFile, "is_direct");
 
     lowerLimits = readVector<double,3>(dataFile,"lower_limits");
-    stepSizes = readVector<double, 3>(dataFile, "step_size");
+    stepSizes = readVector<double, 3>(dataFile, "step_sizes");
     unitCell = readVector<double, 6>(dataFile, "unit_cell");
     metricTensor = metricTensorFromUnitCell(unitCell, !isDirect);
 

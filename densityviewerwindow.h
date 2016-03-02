@@ -34,6 +34,7 @@ private:
     QDoubleSpinBox* colorSaturation;
     Ui::DensityViewerWindow *ui;
     QLabel * coordinateCursor;
+    QComboBox* colormapComboBox;
 };
 
 #endif // DENSITYVIEWERWINDOW_H
