@@ -6,6 +6,9 @@
 #include <QMatrix4x4>
 #include <iomanip>
 
+const double PI = 3.141592653589793;
+
+
 vector<int> xComesFirst(const string& section) {
     vector<int> res;
     if(section=="hkx")
@@ -29,8 +32,7 @@ OrthogonalTransformation::OrthogonalTransformation(
         vector<double> i_t,
         vector<double> i_stepSizes,
         vector<vector<double>> i_metricTensor) :
-    t{i_t},
-    stepSizes{i_stepSizes},
+    t{i_t},    stepSizes{i_stepSizes},
     metricTensor{i_metricTensor}
 {
     assert(dimIn()==dimOut());
@@ -205,7 +207,7 @@ A readConstant(H5File f, const string& datasetName) {
 }
 
 double deg2rad(double a) {
-    return a/180*M_PI;
+    return a/180*PI;
 }
 
 vector<vector<double>> metricTensorFromUnitCell(

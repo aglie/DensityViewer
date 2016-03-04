@@ -124,7 +124,7 @@ DensityViewer::DensityViewer(QWidget *parent) :
     showGrid=false;
     setInteractionMode(DensityViewerInteractionMode::pan);
     marginLeft=50;
-    marginRight=2;
+    marginRight=20;
     marginTop=30;
     marginBottom=30;
     zoom = 1;
