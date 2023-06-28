@@ -50,5 +50,5 @@ jobs:
     - name: Upload
       uses: actions/upload-artifact@v3.1.2
       with:
-        path: build/actions_test
-        name: actions_test
+        path: build/PDFViewer
+        name: PDFViewer-linux
