@@ -29,6 +29,7 @@ public:
                              vector<int> i_sectionIndices,
                              vector<vector<double>> i_metricTensor);
     vector<double> operator()(const vector<int>& ind);
+    vector<int> hkl2ind(const vector<double>& hkl);
     OrthogonalTransformation getSection(string section, int x);
     double transformAxis(int axisN, int index);
     double transformAxisInv(int axisN, double h);
@@ -86,7 +87,8 @@ public:
     extractSectionMemoStruc extractSectionMemo;
 
     //vector<double> data;
-    //double at(int x, int y, int z) {return data[(x*size[1]+y)*size[2]+z];}
+    double atInd(int x, int y, int z);
+    double atHKL(const vector<double> & hkl);
     vector<double> ind2hkl(const vector<int> & indices);
     double lowerLimit(int i);
     double upperLimit(int i);

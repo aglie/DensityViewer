@@ -5,9 +5,9 @@
 #include <cmath>
 #include <QMatrix4x4>
 #include <iomanip>
+#include <limits>
 
 const double PI = 3.141592653589793;
-
 
 vector<int> xComesFirst(const string& section) {
     vector<int> res;
@@ -59,6 +59,15 @@ vector<double> OrthogonalTransformation::operator()(const vector<int> & ind) {
 
     return res;
 }
+
+vector<int> OrthogonalTransformation::hkl2ind(const vector<double> & hkl) {
+    vector<int> ind = {0, 0, 0};
+    for(int i=0; i<dimIn(); ++i)
+        ind[sectionIndices[i]]=round((hkl[i]-t[i])/stepSizes[i]);
+
+    return ind;
+}
+
 double OrthogonalTransformation::transformAxis(int axisN, int index) {
     return t[sectionIndices[axisN]]+index*stepSizes[axisN];
 }
@@ -308,7 +317,6 @@ DensitySection DensityData::extractSection(string section, double x) {
     xi=min(xi,size[sectionIndex]-1);
     xi=max(xi,0);
 
-
     offset[sectionIndex]=xi;
     for(auto i : outSectionAxes)
         count[i]=size[i];
@@ -359,4 +367,29 @@ double DensityData::upperLimit(int i) {
 
 double DensityData::stepSize(int i) {
     return stepSizes[i];
+}
+
+double DensityData::atInd(int x, int y, int z) {
+
+    if(x<0 || y<0 || z<0 || x>=size[0] || y>=size[1] || z>=size[2])
+        return std::numeric_limits<double>::quiet_NaN();
+
+    //TODO: also check the upper limits. If they are outside return nan as well
+
+    DataSpace dataspace = data.getSpace();
+    hsize_t offset[3]={(hsize_t) x,(hsize_t) y,(hsize_t) z};
+    dataspace.selectElements(H5S_SELECT_SET, 1, offset);
+
+    double * dataBuffer = (double*) malloc(sizeof(double));
+
+    hsize_t     sectionSize[1]={1};
+    DataSpace memspace( 1, sectionSize );
+    data.read(dataBuffer, PredType::NATIVE_DOUBLE, memspace, dataspace);
+
+    return dataBuffer[0];
+}
+
+double DensityData::atHKL(const vector<double> & hkl) {
+    auto ind = tran.hkl2ind(hkl);
+    return atInd(ind[0], ind[1], ind[2]);
 }

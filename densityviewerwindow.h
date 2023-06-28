@@ -2,7 +2,7 @@
 #define DENSITYVIEWERWINDOW_H
 
 #include <QMainWindow>
-#include <densityviewer.h>
+#include "densityviewer.h"
 #include <QLabel>
 #include <QSpinBox>
 #include <QComboBox>

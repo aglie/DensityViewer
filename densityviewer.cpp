@@ -100,13 +100,16 @@ void Info::onMouseMove(QMouseEvent * event) {
     auto x=pos.x(), y=pos.y();
     auto hkl=parent->pix2hkl(x,y);
 
+    auto intensity = parent->data.atHKL(hkl);
+//    auto intensity = parent->currentSection.at(x, y);
+
     string hklNames = axesNames(parent->data.isDirect);
 
     ostringstream res;
     res << std::setprecision(3);
-    res << hklNames[0] << "=" << hkl[0] << " " << hklNames[1] << "=" << hkl[1] << " " << hklNames[2] << "=" << hkl[2];
+    res << hklNames[0] << "=" << hkl[0] << endl << hklNames[1] << "=" << hkl[1] << endl << hklNames[2] << "=" << hkl[2] << endl << "intensity=" << intensity;
 
-    emit parent->dataCursorMoved(x,y,hkl,res.str());
+    emit parent->dataCursorMoved(x, y, hkl,res.str());
 }
 }
 
@@ -412,12 +415,17 @@ void DensityViewer::pan(int dx,int dy) { //panning in screen pixels
 }
 
 vector<double> DensityViewer::pix2hkl(double x_screen, double y_screen) {
-    auto tran = imageTransform();
+    auto translate = QTransform::fromTranslate(0.5, 0.5);
+
+    //TODO: check: does this additional translation by 0.5 pixels probably need to go to the imageItransofm()?
+    auto tran = translate*imageTransform();
 
     auto res = tran.inverted().map(QPoint(x_screen,y_screen));
 
     return currentSection.ind2hkl(vector<int> {res.x(),res.y()});
 }
+
+
 
 void DensityViewer::mousePressEvent(QMouseEvent * event) {
     interactionInstrument->onMousePress(event);

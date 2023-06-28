@@ -21,8 +21,6 @@ HEADERS  += densityviewer.h \
     densityviewerwindow.h \
     densitydata.h
 
-
-
 unix|win32: LIBS += -L$$PWD/hdf5/lib/ -lhdf5 -lhdf5_cpp -lhdf5_hl -lhdf5_hl_cpp -lhdf5_tools -lszip -lz
 
 INCLUDEPATH += $$PWD/hdf5/include
