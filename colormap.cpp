@@ -9,7 +9,7 @@ const Colormap Colormap::BrewerBlackToRed(vector<int>{103,0,31,178,24,43,214,96,
 const Colormap Colormap::BrewerRedYellowBlue(vector<int>{49,54,149,69,117,180,116,173,209,171,217,233,224,243,248,255,255,191,254,224,144,253,174,97,244,109,67,215,48,39,165,0,38});
 const Colormap Colormap::BrewerRedYellowGreen(vector<int>{0,104,55,26,152,80,102,189,99,166,217,106,217,239,139,255,255,191,254,224,139,253,174,97,244,109,67,215,48,39,165,0,38});
 const Colormap Colormap::BrewerRedYellowGreenBlue(vector<int>{94,79,162,50,136,189,102,194,165,171,221,164,230,245,152,255,255,191,254,224,139,253,174,97,244,109,67,213,62,79,158,1,66});
-
+//
 const map<string,const Colormap& > Colormap::AvailableColormaps = {{"BrownToGreen",BrewerBrownToGreen},
                                                                    //{"GreenToPink",BrewerGreenToPink},
                                                                    //{"GreenToPurple",BrewerGreenToPurple},
