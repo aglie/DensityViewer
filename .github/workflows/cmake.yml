@@ -27,7 +27,7 @@ jobs:
         host: 'linux' #windows
         source: 'true'
         target: 'desktop'
-        arch: 'win64_msvc2019_64'
+#        arch: 'win64_msvc2019_64'
         dir: '${{github.workspace}}/qt/'
         install-deps: 'true'
 #         modules: 'qtcharts qtwebengine'
