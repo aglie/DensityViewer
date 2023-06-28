@@ -30,17 +30,7 @@ jobs:
 #        arch: 'win64_msvc2019_64'
         dir: '${{github.workspace}}/qt/'
         install-deps: 'true'
-#         modules: 'qtcharts qtwebengine'
-#         archives: 'qtbase qtsvg'
-#         cache: 'false'
-#         cache-key-prefix: 'install-qt-action'
         setup-python: 'false'
-#         tools: 'tools_ifw tools_qtcreator,qt.tools.qtcreator'
-#         set-env: 'true'
-#         tools-only: 'true'
-#         aqtversion: '==3.1.*'
-#         py7zrversion: '==0.20.*'
-#         extra: '--external 7z'
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
@@ -57,8 +47,8 @@ jobs:
 #       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
 #       run: ctest -C ${{env.BUILD_TYPE}}
 #
-#     - name: Upload
-#       uses: actions/upload-artifact@v3.1.2
-#       with:
-#         path: build/actions_test
-#         name: actions_test
+    - name: Upload
+      uses: actions/upload-artifact@v3.1.2
+      with:
+        path: build/actions_test
+        name: actions_test
