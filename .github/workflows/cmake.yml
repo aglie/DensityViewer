@@ -50,5 +50,5 @@ jobs:
     - name: Upload
       uses: actions/upload-artifact@v3.1.2
       with:
-        path: Release\PDFViewer.exe #build/PDFViewer
+        path: build/Release/PDFViewer.exe #build/PDFViewer
         name: PDFViewer.exe
