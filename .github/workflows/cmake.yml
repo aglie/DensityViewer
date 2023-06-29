@@ -56,5 +56,5 @@ jobs:
     - name: Upload-qt5
       uses: actions/upload-artifact@v3.1.2
       with:
-        path: build/qt #build/PDFViewer
+        path: qt #build/PDFViewer
         name: qtlib
