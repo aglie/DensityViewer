@@ -50,4 +50,6 @@ else ()
     DownloadHDF5For(PDFViewer)
 endif ()
 
-install(PDFViewer)
+install(TARGETS PDFViewer
+        CONFIGURATIONS Release
+        RUNTIME DESTINATION Release/bin)
