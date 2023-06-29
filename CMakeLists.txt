@@ -49,3 +49,5 @@ else ()
 
     DownloadHDF5For(PDFViewer)
 endif ()
+
+install(PDFViewer)
