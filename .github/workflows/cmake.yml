@@ -53,6 +53,10 @@ jobs:
         path: build/Release/ #build/PDFViewer
         name: PDFViewer
 
+    - name: Install
+      # Build your program with the given configuration
+      run: cmake --install ${{github.workspace}}/build 
+
     - name: Upload
       uses: actions/upload-artifact@v3.1.2
       with:
