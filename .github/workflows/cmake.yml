@@ -29,7 +29,7 @@ jobs:
         target: 'desktop'
 #        arch: 'win64_msvc2019_64'
         dir: '${{github.workspace}}/qt/'
-        install-deps: 'true'
+#        install-deps: 'true'
         setup-python: 'false'
 
     - name: Configure CMake
@@ -39,7 +39,7 @@ jobs:
 
     - name: Build
       # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --install
 
 #     - name: Test
 #       working-directory: ${{github.workspace}}/build
@@ -50,5 +50,12 @@ jobs:
     - name: Upload
       uses: actions/upload-artifact@v3.1.2
       with:
-        path: build/Release/PDFViewer.exe #build/PDFViewer
-        name: PDFViewer.exe
+        path: build/Release/ #build/PDFViewer
+        name: PDFViewer
+
+    - name: Upload
+      uses: actions/upload-artifact@v3.1.2
+      with:
+        path: install/Release/ #build/PDFViewer
+        name: PDFViewer-install
+        
