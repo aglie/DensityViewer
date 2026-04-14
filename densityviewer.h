@@ -3,6 +3,9 @@
 
 #include <QWidget>
 #include <QMouseEvent>
+#include <QWheelEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include "densitydata.h"
 #include "colormap.h"
 #include <memory>
@@ -59,6 +62,7 @@ public:
     ~Zoom() {}
 private:
     bool drawZoomRect;
+    bool zooming;
     QPoint zoomRectStart, zoomRectEnd;
 
 };
@@ -72,7 +76,7 @@ public:
 
 }
 
-enum class DensityViewerInteractionMode {nothing, info, pan, zoom};
+enum class DensityViewerInteractionMode {nothing, pan, zoom};
 
 class DensityViewer : public QWidget
 {
@@ -127,6 +131,7 @@ private:
     void mouseMoveEvent(QMouseEvent * event) Q_DECL_OVERRIDE;
     void mousePressEvent(QMouseEvent * event) Q_DECL_OVERRIDE;
     void mouseReleaseEvent(QMouseEvent * event) Q_DECL_OVERRIDE;
+    void wheelEvent(QWheelEvent * event) Q_DECL_OVERRIDE;
     int marginTop, marginBottom, marginLeft, marginRight;
 
     void updateSection();

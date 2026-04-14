@@ -30,14 +30,14 @@ namespace DensityViewerInstruments {
 DoNothing::DoNothing(DensityViewer* p) :
     DensityViewerInteractionInstrument(p)
 {
-    parent->setMouseTracking(false);
+    parent->setMouseTracking(true);
 }
 
 Pan::Pan(DensityViewer* p) :
     DensityViewerInteractionInstrument(p),
     panning(false)
 {
-    parent->setMouseTracking(false);
+    parent->setMouseTracking(true);
 }
 void Pan::onMousePress(QMouseEvent * event) {
     panning = true;
@@ -60,28 +60,34 @@ void Pan::onMouseRelease(QMouseEvent * event) {
 
 Zoom::Zoom(DensityViewer* p) :
     DensityViewerInteractionInstrument(p),
-    drawZoomRect(false)
+    drawZoomRect(false),
+    zooming(false)
 {
-    parent->setMouseTracking(false);
+    parent->setMouseTracking(true);
 }
 void Zoom::onMousePress(QMouseEvent * event) {
+    zooming = true;
     zoomRectStart = event->pos();
 }
 void Zoom::onMouseMove(QMouseEvent * event) {
-    drawZoomRect = true;
-    zoomRectEnd = event->pos();
-    parent->update();
+    if(zooming) {
+        drawZoomRect = true;
+        zoomRectEnd = event->pos();
+        parent->update();
+    }
 }
 void Zoom::onMouseRelease(QMouseEvent * event) {
+    if(!zooming) return;
     auto pos = event->pos();
 
     drawZoomRect = false;
+    zooming = false;
     parent->zoomTo(QRect(zoomRectStart, pos));
 }
 
 void Zoom::paint(QPainter & painter) {
     if(drawZoomRect) {
-        painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+        painter.setPen(QPen(QColor(70, 130, 200), 1, Qt::SolidLine));
         painter.setBrush(Qt::NoBrush);
         painter.drawRect(QRect(zoomRectEnd,zoomRectStart));
     }
@@ -236,7 +242,7 @@ void drawTickLables(QLineF & guideLine, vector<double> &xticks, vector<QLineF> &
 }
 
 void drawTicks(QLineF & tickBaseline, vector<QLineF> & gridLines,QPainter & painter) {
-    painter.setPen(QPen(Qt::black,2, Qt::SolidLine));
+    painter.setPen(QPen(QColor(212, 212, 212), 2, Qt::SolidLine));
     double tickLength=5;
 
     for(auto gline : gridLines) {
@@ -267,6 +273,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
 
     if(!dataIsInitialised)
     {
+        painter.setPen(QColor(160, 160, 160));
         painter.drawText(this->rect(),Qt::AlignHCenter | Qt::AlignVCenter, "Data will appear here.");
 
     }
@@ -343,8 +350,13 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
             return gridTransform.map(QLineF(QPointF(-1000,ypos),QPointF( 1000,ypos)));});
 
 
+        QColor marginColor(45, 45, 48);
+        QColor textColor(212, 212, 212);
+        QColor gridColor(80, 130, 200);
+        QColor borderColor(100, 100, 100);
+
         if(showGrid) {
-            painter.setPen(QPen(Qt::blue,1, Qt::DashLine));
+            painter.setPen(QPen(gridColor, 1, Qt::DashLine));
             for (auto line : xTickLines) {
                 painter.drawLine(line);
             }
@@ -354,18 +366,18 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
         }
 
         painter.setPen(Qt::NoPen);
-        painter.setBrush(QBrush(Qt::white));
+        painter.setBrush(QBrush(marginColor));
 
         //Drawing margins
         painter.drawPolygon(QPolygon(QRect(0,0,width(),height())).subtracted(pa));
 
         //Draw figure title
-        painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+        painter.setPen(QPen(textColor, 1, Qt::SolidLine));
         painter.drawText(QRect(pa.left(),0,pa.width(),pa.top()),Qt::AlignHCenter | Qt::AlignVCenter, QString::fromStdString(currentSection.title()));
         //currentSection
 
         // Figure out the positions and draw the tick labels
-        painter.setPen(QPen(Qt::black,1, Qt::SolidLine));
+        painter.setPen(QPen(textColor, 1, Qt::SolidLine));
 
         double tickMargin = 5;
         auto lowerImageBorder = QLineF(pa.bottomLeft(),pa.bottomRight());
@@ -382,7 +394,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
         drawTicks(lowerImageBorder,xTickLines,painter);
         drawTicks(leftImageBorder ,yTickLines,painter);
 
-        painter.setPen(QPen(Qt::black,2, Qt::SolidLine));
+        painter.setPen(QPen(borderColor, 2, Qt::SolidLine));
 
         painter.setBrush(Qt::NoBrush);
         painter.drawRect(pa.adjusted(-1,-1,1,1));
@@ -434,6 +446,30 @@ void DensityViewer::mousePressEvent(QMouseEvent * event) {
 
 void DensityViewer::mouseMoveEvent(QMouseEvent * event) {
     interactionInstrument->onMouseMove(event);
+
+    if(dataIsInitialised) {
+        auto pos = event->pos();
+        auto x = pos.x(), y = pos.y();
+        auto hkl = pix2hkl(x, y);
+        auto intensity = data.atHKL(hkl);
+        string hklNames = axesNames(data.isDirect);
+
+        ostringstream res;
+        res << std::setprecision(3);
+        res << hklNames[0] << "=" << hkl[0] << "\n"
+            << hklNames[1] << "=" << hkl[1] << "\n"
+            << hklNames[2] << "=" << hkl[2] << "\n"
+            << "intensity=" << intensity;
+
+        emit dataCursorMoved(x, y, hkl, res.str());
+    }
+}
+
+void DensityViewer::wheelEvent(QWheelEvent * event) {
+    double degrees = event->angleDelta().y() / 8.0;
+    double factor = pow(1.01, degrees);
+    changeZoom(factor);
+    event->accept();
 }
 
 void DensityViewer::mouseReleaseEvent(QMouseEvent * event) {
@@ -451,10 +487,6 @@ void DensityViewer::setInteractionMode(DensityViewerInteractionMode interactionM
     }
     case DensityViewerInteractionMode::zoom : {
         interactionInstrument.reset(new DensityViewerInstruments::Zoom(this));
-        break;
-    }
-    case DensityViewerInteractionMode::info : {
-        interactionInstrument.reset(new DensityViewerInstruments::Info(this));
         break;
     }
     case DensityViewerInteractionMode::nothing : {
@@ -543,6 +575,9 @@ void DensityViewer::setColormap(QString cmap) {
 void DensityViewer::loadDensityData(QString filename, bool gohome) {
     data = DensityData(filename.toStdString());
     dataIsInitialised = true;
+    // Reset to safe defaults for the new data
+    currentSectionDirection = "hkx";
+    sectionIndex = 0;
     updateSection();
     if(gohome)
         goHome();

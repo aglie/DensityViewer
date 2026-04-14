@@ -2,10 +2,14 @@
 #define DENSITYVIEWERWINDOW_H
 
 #include <QMainWindow>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include "densityviewer.h"
 #include <QLabel>
 #include <QSpinBox>
 #include <QComboBox>
+#include <QListWidget>
+#include <QSettings>
 
 namespace Ui {
 class DensityViewerWindow;
@@ -19,6 +23,11 @@ public:
     explicit DensityViewerWindow(QWidget *parent = 0);
     ~DensityViewerWindow();
 
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
+
 private slots:
     void setXLimits();
     void updateControls();
@@ -26,6 +35,10 @@ private slots:
     void openFile();
     void updateProgramTitle();
     void updateDataset();
+    void loadFileFromPath(const QString &path);
+    void refreshFolderList();
+    void addToRecentFiles(const QString &path);
+    void removeRecentFile(const QPoint &pos);
 private:
     QString currentFile;
     QComboBox* sectionComboBox;
@@ -35,6 +48,11 @@ private:
     Ui::DensityViewerWindow *ui;
     QLabel * coordinateCursor;
     QComboBox* colormapComboBox;
+    QListWidget* recentFilesList;
+    QListWidget* folderFilesList;
+    QWidget* fileBrowserWidget;
+    QWidget* sidebarWidget;
+    QSettings settings;
 };
 
 #endif // DENSITYVIEWERWINDOW_H
