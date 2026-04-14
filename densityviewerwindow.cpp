@@ -383,7 +383,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
 
     coordinateCursor = new QLabel;
     coordinateCursor->setMinimumWidth(150);
-    coordinateCursor->setStyleSheet("color: #c0c0c0; font-family: monospace; font-size: 11px; padding: 6px; background: #1e1e1e; border-radius: 4px;");
+    coordinateCursor->setStyleSheet("color: #c0c0c0; font-family: 'Menlo'; font-size: 11px; padding: 6px; background: #1e1e1e; border-radius: 4px;");
     coordinateCursor->setMinimumHeight(70);
     connect(densityViewer,
             &DensityViewer::dataCursorMoved,
