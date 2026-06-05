@@ -3,64 +3,93 @@ name: CMake
 on:
   push:
     branches: [ "master" ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ "master" ]
 
 env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
 
 jobs:
-  build:
-    # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
-    # You can convert this to a matrix build if you need cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-    runs-on: windows-latest #ubuntu-latest
-
+  build-windows:
+    runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+
+    - name: Install Static Qt5
+      uses: orestonce/install-qt-static@v0.4.3
+      with:
+        version: Qt5.15.7-Windows-x86_64-MinGW8.1.0-staticFull-20221104
+
+    - name: Configure CMake
+      run: |
+        cmake -B ${{github.workspace}}/build `
+          -G "MinGW Makefiles" `
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
+          -DBUILD_STATIC=ON `
+          -DCMAKE_PREFIX_PATH="C:/QtStatic"
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        path: build/PDFViewer.exe
+        name: PDFViewer-Windows-Static
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
 
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
         version: '5.15.2'
-        host: 'windows' #linux
-        source: 'true'
-        target: 'desktop'
-#        arch: 'win64_msvc2019_64'
-        dir: '${{github.workspace}}/qt/'
-#        install-deps: 'true'
-        setup-python: 'false'
-        tools: ''
-        
-    - name: Remove File
-      uses: JesseTG/rm@v1.0.3
-      with:
-        path: ${{github.workspace}}/qt/Qt/5.15.2/msvc2019_64/bin
 
     - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      run: |
+        cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DBUILD_STATIC=ON
 
     - name: Build
-      # Build your program with the given configuration
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
 
-#     - name: Test
-#       working-directory: ${{github.workspace}}/build
-#       # Execute tests defined by the CMake configuration.
-#       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-#       run: ctest -C ${{env.BUILD_TYPE}}
-#
-    - name: Upload
-      uses: actions/upload-artifact@v3.1.2
+    - name: Bundle with macdeployqt
+      run: |
+        macdeployqt build/PDFViewer.app -dmg
+        mv build/PDFViewer.dmg build/PDFViewer-macOS.dmg
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
       with:
-        path: build/Release/ #build/PDFViewer
-        name: PDFViewer
-        
-#     - name: Upload-qt5
-#       uses: actions/upload-artifact@v3.1.2
-#       with:
-#         path: qt #build/PDFViewer
-#         name: qtlib
+        path: build/PDFViewer-macOS.dmg
+        name: PDFViewer-macOS-DMG
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download Windows Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: PDFViewer-Windows-Static
+        path: release-artifacts/windows
+
+    - name: Download MacOS Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: PDFViewer-macOS-DMG
+        path: release-artifacts/macos
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          release-artifacts/windows/PDFViewer.exe
+          release-artifacts/macos/PDFViewer-macOS.dmg
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

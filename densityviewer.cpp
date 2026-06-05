@@ -212,7 +212,7 @@ void drawTickLables(QLineF & guideLine, vector<double> &xticks, vector<QLineF> &
     auto xTickLine = begin(xTickLines);
     for(;xtick != end(xticks); ++xTickLine, ++xtick) {
         QPointF drawPoint;
-        guideLine.intersect(*xTickLine,&drawPoint);
+        guideLine.intersects(*xTickLine,&drawPoint);
 
         ostringstream res;
         res << std::setprecision(4);
@@ -247,7 +247,7 @@ void drawTicks(QLineF & tickBaseline, vector<QLineF> & gridLines,QPainter & pain
 
     for(auto gline : gridLines) {
         QPointF intersection;
-        auto itype = tickBaseline.intersect(gline, &intersection);
+        auto itype = tickBaseline.intersects(gline, &intersection);
         if(itype == QLineF::BoundedIntersection) {
             auto t = gline.unitVector();
             painter.drawLine(intersection.x(),

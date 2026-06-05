@@ -85,7 +85,7 @@ class DensityViewer : public QWidget
 public:
     explicit DensityViewer(QWidget *parent = 0);
     ~DensityViewer();
-    QSize sizeHint() const;
+    QSize sizeHint() const override;
 
     void changeZoom(double factor);
     void pan(int dx, int dy);

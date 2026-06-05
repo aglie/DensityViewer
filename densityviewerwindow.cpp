@@ -315,7 +315,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     sectionComboBox->setEnabled(false);
     sectionComboBox->setFocusPolicy(Qt::ClickFocus);
     connect(sectionComboBox,
-            static_cast<void (QComboBox::*)(const QString &)>(&QComboBox::activated),
+            static_cast<void (QComboBox::*)(const QString &)>(&QComboBox::textActivated),
             [=](QString sec){densityViewer->setSectionDirection( sec );});
     controllerBar->addWidget(sectionComboBox);
 
