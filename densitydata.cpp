@@ -242,14 +242,29 @@ vector<vector<double>> metricTensorFromUnitCell(
             {tt[8],tt[9],tt[10]}};
 }
 
+bool hasDataset(H5File& file, const string& name) {
+    try {
+        Exception::dontPrint();
+        DataSet ds = file.openDataSet(name);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 void checkFileFormat(H5File& file) {
+    if (!hasDataset(file, "format")) {
+        // Legacy format without "format" tag
+        return;
+    }
+
     std::string format;
     try {
-    StrType datatype(0, H5T_VARIABLE);
-    DataSpace dataspace(H5S_SCALAR);
-    DataSet datset = file.openDataSet("format");
+        StrType datatype(0, H5T_VARIABLE);
+        DataSpace dataspace(H5S_SCALAR);
+        DataSet datset = file.openDataSet("format");
 
-    datset.read(format, datatype, dataspace);
+        datset.read(format, datatype, dataspace);
     } catch(H5::FileIException) {
         throw(UnknownFormat());
     }
@@ -275,24 +290,38 @@ DensityData::DensityData(string filename) {
 
     checkFileFormat(dataFile);
 
-    data = dataFile.openDataSet("data");
-    //rebinnedData = dataFile.openDataSet("rebinned_data");
-    //noPixRebinned = dataFile.openDataSet( "number_of_pixels_rebinned" );
+    if (hasDataset(dataFile, "data")) {
+        data = dataFile.openDataSet("data");
+    } else if (hasDataset(dataFile, "rebinned_data")) {
+        data = dataFile.openDataSet("rebinned_data");
+    } else {
+        throw(UnknownFormat());
+    }
 
     //Read dataset and crystal data
     isDirect = readConstant<bool>(dataFile, "is_direct");
 
-    lowerLimits = readVector<double,3>(dataFile,"lower_limits");
-    stepSizes = readVector<double, 3>(dataFile, "step_sizes");
+    if (hasDataset(dataFile, "lower_limits")) {
+        lowerLimits = readVector<double,3>(dataFile,"lower_limits");
+    } else if (hasDataset(dataFile, "maxind")) {
+        lowerLimits = readVector<double,3>(dataFile,"maxind");
+        for (auto &ll : lowerLimits) ll = -ll;
+    } else {
+        lowerLimits = {0, 0, 0};
+    }
+
+    if (hasDataset(dataFile, "step_sizes")) {
+        stepSizes = readVector<double, 3>(dataFile, "step_sizes");
+    } else if (hasDataset(dataFile, "step_size")) {
+        stepSizes = readVector<double, 3>(dataFile, "step_size");
+    } else {
+        stepSizes = {1, 1, 1};
+    }
+
     unitCell = readVector<double, 6>(dataFile, "unit_cell");
     metricTensor = metricTensorFromUnitCell(unitCell, !isDirect);
 
     tran = OrthogonalTransformation(lowerLimits, stepSizes, metricTensor);
-
-    DSetCreatPropList cparms = data.getCreatePlist();
-//    hsize_t chunk_dims[3];
-//    int rank_chunk = cparms.getChunk( 3, chunk_dims);
-
 
     hsize_t datasetDimesions[3];
     data.getSpace().getSimpleExtentDims( datasetDimesions, NULL);
