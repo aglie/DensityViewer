@@ -6,6 +6,9 @@
 #include <QWheelEvent>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QPointF>
+#include <QVector>
+#include <QStringList>
 #include "densitydata.h"
 #include "colormap.h"
 #include <memory>
@@ -78,6 +81,11 @@ public:
 
 enum class DensityViewerInteractionMode {nothing, pan, zoom};
 
+// How a split (symmetry-aware) panel stitches several datasets together.
+// In m-3m the in-plane principal planes (axis0=0 and axis1=0, e.g. h=0/k=0) are
+// all {100} mirrors, so juxtaposing datasets across them is a meaningful test.
+enum class SplitLayout {HalvesAxis0, HalvesAxis1, Quadrants};
+
 class DensityViewer : public QWidget
 {
     Q_OBJECT
@@ -97,6 +105,19 @@ public:
 
     QRect plottingArea();
 
+    // -- Synchronisation accessors (used to lock views together) --
+    double viewZoom() const {return zoom;}
+    QPointF viewCenterImg();                 // image-space point under the plot centre
+    double colorSaturationValue() const {return colorSaturation;}
+    QString colormapName() const {return currentColormapName;}
+    bool hasData() const {return dataIsInitialised;}
+    bool isSplit() const {return splitMode;}
+    double intensityAtHkl(const vector<double>& hkl);  // split-aware value lookup
+
+    // -- Symmetry-aware split --
+    void configureSplit(QVector<DensityData*> sources, QStringList labels, SplitLayout layout);
+    void clearSplit();
+
 public slots:
     void setColorSaturation(double);
     void setSectionIndex(double);
@@ -108,11 +129,16 @@ public slots:
     void setColormap(QString);
     void loadDensityData(QString,bool gohome=true);
     void updateDataset(QString);
+    void setViewState(QPointF imgCenter, double zoomFactor);  // apply a synced view
+    void setActive(bool);                                     // highlight focused panel
+    void setCursorMarker(vector<double> hkl, bool show);      // cross-panel cursor
 
 signals:
     void loadedDensityData(DensityData &);
     void changedSectionDirection();
     void dataCursorMoved(int x, int y, vector<double> hkl, string text);
+    void viewChanged();      // pan/zoom changed by the user
+    void panelActivated();   // user clicked this panel
 
 private:
     bool dataIsInitialised;
@@ -139,6 +165,23 @@ private:
     QImage sectionImage;
 
     Colormap colormap;
+    QString currentColormapName;
+
+    bool active;             // is this the focused panel (draw highlight border)
+
+    // Cross-panel cursor marker (hkl of the point being hovered in a sibling panel)
+    bool cursorMarkerShown;
+    vector<double> cursorMarkerHkl;
+
+    // Symmetry-aware split state
+    bool splitMode;
+    SplitLayout splitLayout;
+    QVector<DensityData*> splitSources;   // datasets feeding the split (1..4)
+    QStringList splitLabels;              // filenames for in-panel annotation
+    DensityData* quadrantSource[4];       // resolved dataset per quadrant
+    void resolveQuadrants();
+    DensitySection buildSplitSection();
+    int quadrantForHkl(const vector<double>& hkl);
 
 protected:
     void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE;
