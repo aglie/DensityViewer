@@ -8,8 +8,13 @@
 #include <QLabel>
 #include <QSpinBox>
 #include <QComboBox>
+#include <QCheckBox>
+#include <QPushButton>
 #include <QListWidget>
+#include <QSplitter>
 #include <QSettings>
+#include <QList>
+#include <functional>
 
 namespace Ui {
 class DensityViewerWindow;
@@ -34,24 +39,62 @@ private slots:
     void fillInHKX();
     void openFile();
     void updateProgramTitle();
-    void updateDataset();
+    void reloadActiveDataset();
     void loadFileFromPath(const QString &path);
     void refreshFolderList();
     void addToRecentFiles(const QString &path);
     void removeRecentFile(const QPoint &pos);
+
 private:
     QString currentFile;
+
+    // -- Comparison panels --
+    QList<DensityViewer*> panels;   // side-by-side dataset views (own the data)
+    DensityViewer* activePanel;     // focused panel (target of per-panel actions)
+    DensityViewer* splitViewer;     // composite split/quadrant view (own widget)
+    QSplitter* viewerSplitter;      // outer vertical splitter (stacks the two rows)
+    QSplitter* topRow;              // panels 1-2
+    QSplitter* bottomRow;           // panels 3-4
+    QWidget* viewerArea;            // wraps splitter + splitViewer, toggles visibility
+    bool splitView;                 // true when the composite split is shown
+    DensityViewerInteractionMode currentTool;
+
+    DensityViewer* createPanel();
+    void onPanelLoaded(DensityViewer* v, const QString& path);
+    void setActivePanel(DensityViewer* v);
+    QList<DensityViewer*> syncTargets();                 // viewers that should stay locked
+    void applyToTargets(const std::function<void(DensityViewer*)>& fn);
+    void broadcastView(DensityViewer* source);
+    void broadcastCursor(const vector<double>& hkl, DensityViewer* source);
+    void rebuildSaturationControls();
+    void configureLoadedPanel(DensityViewer* v);
+    void addPanel();
+    void removeActivePanel();
+    void relayoutPanels();
+    void setSplitView(bool on);
+    void rebuildSplit();
+    void updateCursorReadout(const vector<double>& hkl);
+
+    // -- Controls --
     QComboBox* sectionComboBox;
-    DensityViewer * densityViewer;
-    QDoubleSpinBox * sectionIndex;
+    QDoubleSpinBox* sectionIndex;
     QDoubleSpinBox* colorSaturation;
-    Ui::DensityViewerWindow *ui;
-    QLabel * coordinateCursor;
     QComboBox* colormapComboBox;
+    QWidget* masterSatRow;      // single shared saturation control (scales linked)
+    QWidget* perPanelSatBox;    // one saturation control per panel (scales unlinked)
+    QCheckBox* gridCheck;
+    QCheckBox* linkScalesCheck;
+    QComboBox* splitLayoutCombo;
+    QPushButton* splitToggleBtn;
+    QPushButton* removePanelBtn;
+    QPushButton* panButton;
+    QPushButton* zoomButton;
+    QLabel* coordinateCursor;
     QListWidget* recentFilesList;
     QListWidget* folderFilesList;
     QWidget* fileBrowserWidget;
     QWidget* sidebarWidget;
+    Ui::DensityViewerWindow *ui;
     QSettings settings;
 };
 

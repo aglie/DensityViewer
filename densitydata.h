@@ -11,6 +11,10 @@ using namespace std;
 
 string axesNames(bool direct);
 
+// In-plane axis indices (into the full hkl vector) for a section direction,
+// e.g. "hkx" -> {0,1} (h,k), "hxl" -> {0,2} (h,l), "xkl" -> {1,2} (k,l).
+vector<int> sectionAxes(const string& section);
+
 class UnknownFormat : std::exception {
 public:
     UnknownFormat() {}

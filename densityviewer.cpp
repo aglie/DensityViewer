@@ -3,6 +3,7 @@
 #include <QPixmap>
 #include <QImage>
 #include <QPainter>
+#include <QFont>
 #include <QPen>
 #include <cmath>
 #include <QTransform>
@@ -14,6 +15,7 @@
 #include <QString>
 #include <iomanip>
 #include <map>
+#include <limits>
 
 
 QRgb falseColor(double data, Colormap cmap, vector<double> clims, ColormapInterpolation interpolation) {
@@ -106,7 +108,7 @@ void Info::onMouseMove(QMouseEvent * event) {
     auto x=pos.x(), y=pos.y();
     auto hkl=parent->pix2hkl(x,y);
 
-    auto intensity = parent->data.atHKL(hkl);
+    auto intensity = parent->intensityAtHkl(hkl);
 //    auto intensity = parent->currentSection.at(x, y);
 
     string hklNames = axesNames(parent->data.isDirect);
@@ -139,6 +141,13 @@ DensityViewer::DensityViewer(QWidget *parent) :
     zoom = 1;
     x_pos = 0;
     y_pos = 0;
+
+    currentColormapName = "BlackToRed";
+    active = false;
+    cursorMarkerShown = false;
+    splitMode = false;
+    splitLayout = SplitLayout::Quadrants;
+    for(int i=0; i<4; ++i) quadrantSource[i] = nullptr;
 
     //ui->setupUi(this);
 }
@@ -401,6 +410,104 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
 
 
         interactionInstrument->paint(painter);
+
+        // -- Symmetry-aware split: draw mirror seams and per-region labels --
+        if(splitMode) {
+            double n0 = currentSection.size[0], n1 = currentSection.size[1];
+
+            // Index range [lo,hi] of one side of an axis' zero crossing.
+            auto sideRange = [&](int axis, int side, double& lo, double& hi){
+                double n = currentSection.size[axis];
+                double c = max(0.0, min(currentSection.tran.transformAxisInv(axis,0.0), n));
+                bool stepPos = currentSection.tran.stepSizes[axis] > 0;
+                bool negFirst = stepPos;            // side 0 (coord<0) at low indices?
+                if((side==0)==negFirst) { lo=0; hi=c; } else { lo=c; hi=n; }
+            };
+
+            painter.save();
+            painter.setClipRect(pa);
+            bool drawAxis0 = (splitLayout!=SplitLayout::HalvesAxis1);
+            bool drawAxis1 = (splitLayout!=SplitLayout::HalvesAxis0);
+            painter.setPen(QPen(QColor(255,255,255,190), 1.5, Qt::DashLine));
+            if(drawAxis0) {
+                double c0 = currentSection.tran.transformAxisInv(0,0.0);
+                if(c0>0 && c0<n0)
+                    painter.drawLine(imTransform.map(QPointF(c0,0)), imTransform.map(QPointF(c0,n1)));
+            }
+            if(drawAxis1) {
+                double c1 = currentSection.tran.transformAxisInv(1,0.0);
+                if(c1>0 && c1<n1)
+                    painter.drawLine(imTransform.map(QPointF(0,c1)), imTransform.map(QPointF(n0,c1)));
+            }
+            painter.restore();
+
+            // Source index feeding a given quadrant (mirrors resolveQuadrants()).
+            auto srcIndex = [&](int q)->int {
+                int n = splitSources.size(); if(n==0) return -1;
+                int s0=q&1, s1=(q>>1)&1, idx=q;
+                if(splitLayout==SplitLayout::HalvesAxis0) idx=s0;
+                else if(splitLayout==SplitLayout::HalvesAxis1) idx=s1;
+                else if(n==2) idx=(s0==s1)?0:1;        // diagonal 2x2 quadrants
+                return max(0, min(idx, n-1));
+            };
+            auto mid=[&](int axis,int side){ double lo,hi; sideRange(axis,side,lo,hi); return (lo+hi)/2; };
+
+            // Regions to label: halves -> 2, quadrants -> 4.
+            struct Lbl{ double i,j; int idx; };
+            vector<Lbl> lbls;
+            if(splitLayout==SplitLayout::HalvesAxis0) {
+                lbls.push_back({mid(0,0), n1/2, srcIndex(0)});
+                lbls.push_back({mid(0,1), n1/2, srcIndex(1)});
+            } else if(splitLayout==SplitLayout::HalvesAxis1) {
+                lbls.push_back({n0/2, mid(1,0), srcIndex(0)});
+                lbls.push_back({n0/2, mid(1,1), srcIndex(2)});
+            } else {
+                for(int q=0;q<4;++q) lbls.push_back({mid(0,q&1), mid(1,(q>>1)&1), srcIndex(q)});
+            }
+
+            painter.save();
+            painter.setClipRect(pa);
+            QFont lf = painter.font(); lf.setPointSize(10); lf.setBold(true); painter.setFont(lf);
+            for(const auto& l : lbls) {
+                if(l.idx<0 || l.idx>=splitLabels.size()) continue;
+                QPointF sp = imTransform.map(QPointF(l.i, l.j));
+                QString text = splitLabels.at(l.idx);
+                QRectF box(sp.x()-90, sp.y()-11, 180, 22);
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(QColor(20,20,20,160));
+                QRectF tb = painter.boundingRect(box, Qt::AlignCenter, text).adjusted(-4,-2,4,2);
+                painter.drawRoundedRect(tb, 3, 3);
+                painter.setPen(QColor(245,245,245));
+                painter.drawText(box, Qt::AlignCenter, text);
+            }
+            painter.restore();
+        }
+
+        // -- Cross-panel cursor marker (hkl hovered in any synced panel) --
+        if(cursorMarkerShown && cursorMarkerHkl.size()>=3) {
+            auto axes = sectionAxes(currentSectionDirection);
+            double fi = currentSection.tran.transformAxisInv(0, cursorMarkerHkl[axes[0]]);
+            double fj = currentSection.tran.transformAxisInv(1, cursorMarkerHkl[axes[1]]);
+            QPointF sp = imTransform.map(QPointF(fi+0.5, fj+0.5));
+            if(pa.contains(sp.toPoint())) {
+                painter.save();
+                painter.setClipRect(pa);
+                painter.setPen(QPen(QColor(255,230,120), 1.2));
+                double r=6;
+                painter.drawLine(QPointF(sp.x()-r,sp.y()), QPointF(sp.x()+r,sp.y()));
+                painter.drawLine(QPointF(sp.x(),sp.y()-r), QPointF(sp.x(),sp.y()+r));
+                painter.drawEllipse(sp, 3, 3);
+                painter.restore();
+            }
+        }
+    }
+
+    // -- Focused-panel highlight (drawn over everything, identity transform) --
+    if(active) {
+        painter.setWorldTransform(QTransform());
+        painter.setPen(QPen(QColor(70,130,200), 2));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(rect().adjusted(1,1,-2,-2));
     }
 
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -411,9 +518,22 @@ QSize DensityViewer::sizeHint() const
     return QSize(600, 600);
 }
 
+void DensityViewer::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    // Refit the data to the new widget size. Home locally (signals blocked) so
+    // each panel fits its own size instead of broadcasting onto its siblings.
+    if(dataIsInitialised) {
+        bool was = blockSignals(true);
+        goHome();
+        blockSignals(was);
+    }
+}
+
 void DensityViewer::changeZoom(double factor) {
     zoom*=factor;
     update();
+    emit viewChanged();
 }
 
 void DensityViewer::pan(int dx,int dy) { //panning in screen pixels
@@ -423,6 +543,46 @@ void DensityViewer::pan(int dx,int dy) { //panning in screen pixels
 
     x_pos+=tline.dx();
     y_pos+=tline.dy();
+    update();
+    emit viewChanged();
+}
+
+// Crystallographic (in-plane hkl) coordinate under the centre of the plot.
+// Syncing in hkl rather than pixel index keeps panels aligned even when the
+// datasets being compared have different limits / offsets / sizes.
+QPointF DensityViewer::viewCenterHkl() {
+    QPointF idx = imageTransform().inverted().map(QPointF(plottingArea().center()));
+    double h0 = currentSection.tran.transformAxis(0,0) + idx.x()*currentSection.tran.stepSizes[0];
+    double h1 = currentSection.tran.transformAxis(1,0) + idx.y()*currentSection.tran.stepSizes[1];
+    return QPointF(h0, h1);
+}
+
+// Apply a view broadcast from another panel: match the zoom and slide so the
+// given hkl coordinate sits under this panel's plot centre. Solved directly in
+// double precision (no screen-space int rounding) so it is exact at any zoom.
+void DensityViewer::setViewState(QPointF hklCenter, double zoomFactor) {
+    zoom = zoomFactor;
+    // hkl -> this panel's own fractional pixel index (uses this grid's limits/step)
+    double ix = (hklCenter.x() - currentSection.tran.transformAxis(0,0)) / currentSection.tran.stepSizes[0];
+    double iy = (hklCenter.y() - currentSection.tran.transformAxis(1,0)) / currentSection.tran.stepSizes[1];
+    // Choose x_pos,y_pos so image index (ix,iy) maps to the plot centre.
+    x_pos = 0; y_pos = 0;
+    QTransform rest = imageTransform();            // transform with no leading pan
+    QPointF mapped = rest.inverted().map(QPointF(plottingArea().center()));
+    x_pos = mapped.x() - ix;
+    y_pos = mapped.y() - iy;
+    update();
+}
+
+void DensityViewer::setActive(bool a) {
+    if(active==a) return;
+    active = a;
+    update();
+}
+
+void DensityViewer::setCursorMarker(vector<double> hkl, bool show) {
+    cursorMarkerShown = show;
+    cursorMarkerHkl = hkl;
     update();
 }
 
@@ -440,6 +600,7 @@ vector<double> DensityViewer::pix2hkl(double x_screen, double y_screen) {
 
 
 void DensityViewer::mousePressEvent(QMouseEvent * event) {
+    emit panelActivated();
     interactionInstrument->onMousePress(event);
 }
 
@@ -451,7 +612,7 @@ void DensityViewer::mouseMoveEvent(QMouseEvent * event) {
         auto pos = event->pos();
         auto x = pos.x(), y = pos.y();
         auto hkl = pix2hkl(x, y);
-        auto intensity = data.atHKL(hkl);
+        auto intensity = intensityAtHkl(hkl);
         string hklNames = axesNames(data.isDirect);
 
         ostringstream res;
@@ -550,24 +711,51 @@ void DensityViewer::goHome() {
 }
 
 void DensityViewer::pixelateSection() {
-    sectionImage = QImage(currentSection.size[0], currentSection.size[1], QImage::Format_RGB32);
+    int n0 = currentSection.size[0], n1 = currentSection.size[1];
+    sectionImage = QImage(n0, n1, QImage::Format_RGB32);
 
-    for(int i=0; i<currentSection.size[0]; ++i)
-        for(int j=0; j<currentSection.size[1]; ++j) {
-            auto v = currentSection.at(i,j);
-            sectionImage.setPixel(i, j, falseColor(v, colormap, {-colorSaturation,colorSaturation}, ColormapInterpolation::nearest));
+    if(splitMode && !splitSources.isEmpty()) {
+        // Colour each region with its own dataset's saturation and colormap so
+        // datasets with different exposures can be compared in one split image.
+        resolveQuadrants();
+        for(int i=0;i<n0;++i) {
+            int side0 = (currentSection.tran.transformAxis(0,i) < 0) ? 0 : 1;
+            for(int j=0;j<n1;++j) {
+                int side1 = (currentSection.tran.transformAxis(1,j) < 0) ? 0 : 1;
+                int idx = quadrantSourceIdx[side0 + 2*side1];
+                double sat = (idx>=0 && idx<splitSaturations.size()) ? splitSaturations[idx] : colorSaturation;
+                Colormap cm = colormap;
+                if(idx>=0 && idx<splitColormapNames.size()) {
+                    auto it = Colormap::AvailableColormaps.find(splitColormapNames[idx].toStdString());
+                    if(it != Colormap::AvailableColormaps.end())
+                        cm = it->second;
+                }
+                auto v = currentSection.at(i,j);
+                sectionImage.setPixel(i, j, falseColor(v, cm, {-sat,sat}, ColormapInterpolation::nearest));
+            }
         }
+    } else {
+        for(int i=0; i<n0; ++i)
+            for(int j=0; j<n1; ++j) {
+                auto v = currentSection.at(i,j);
+                sectionImage.setPixel(i, j, falseColor(v, colormap, {-colorSaturation,colorSaturation}, ColormapInterpolation::nearest));
+            }
+    }
     update();
 }
 
 void DensityViewer::updateSection() {
-    currentSection = data.extractSection(currentSectionDirection,sectionIndex);
+    if(splitMode && !splitSources.isEmpty())
+        currentSection = buildSplitSection();
+    else
+        currentSection = data.extractSection(currentSectionDirection,sectionIndex);
     pixelateSection();
     emit changedSectionDirection();
 }
 
 void DensityViewer::setColormap(QString cmap) {
     colormap = Colormap::AvailableColormaps.at(cmap.toStdString());
+    currentColormapName = cmap;
     pixelateSection();
 }
 
@@ -587,5 +775,128 @@ void DensityViewer::loadDensityData(QString filename, bool gohome) {
 
 void DensityViewer::updateDataset(QString filename) {
     loadDensityData(filename, false);
+}
+
+// ---------------------------------------------------------------------------
+// Split / quadrant view: stitch up to four datasets into one section, divided
+// at the in-plane mirror lines (axis0 = 0 and axis1 = 0, e.g. h=0/k=0). For
+// suitably symmetric data these are mirror planes, so a matching pair joins
+// seamlessly and any disagreement shows up as a discontinuity at the seam.
+// ---------------------------------------------------------------------------
+
+void DensityViewer::resolveQuadrants() {
+    int n = splitSources.size();
+    for(int q=0;q<4;++q) { quadrantSource[q]=nullptr; quadrantSourceIdx[q]=-1; }
+    if(n==0) return;
+    // quadrant index q = side0 + 2*side1, side = (coord < 0 ? 0 : 1)
+    int idx[4] = {0,0,0,0};
+    switch(splitLayout) {
+    case SplitLayout::HalvesAxis0:                 // split at axis0 = 0 only
+        idx[0]=0; idx[2]=0; idx[1]=1; idx[3]=1;
+        break;
+    case SplitLayout::HalvesAxis1:                 // split at axis1 = 0 only
+        idx[0]=0; idx[1]=0; idx[2]=1; idx[3]=1;
+        break;
+    case SplitLayout::Quadrants:
+        if(n==2) {
+            // True 2x2 with two datasets: A on the (--)/(++) diagonal, B on (-+)/(+-).
+            idx[0]=0; idx[3]=0; idx[1]=1; idx[2]=1;
+        } else {
+            idx[0]=0; idx[1]=1; idx[2]=2; idx[3]=3;
+        }
+        break;
+    }
+    for(int q=0;q<4;++q) {
+        int i = qBound(0, idx[q], n-1);
+        quadrantSourceIdx[q] = i;
+        quadrantSource[q] = splitSources[i];
+    }
+}
+
+DensitySection DensityViewer::buildSplitSection() {
+    resolveQuadrants();
+
+    DensityData* base = quadrantSource[0] ? quadrantSource[0] : &data;
+    DensitySection baseSec = base->extractSection(currentSectionDirection, sectionIndex);
+
+    // Extract each distinct source's section just once.
+    std::map<DensityData*, DensitySection> secs;
+    secs[base] = baseSec;
+    for(int q=0; q<4; ++q) {
+        DensityData* s = quadrantSource[q];
+        if(s && !secs.count(s))
+            secs[s] = s->extractSection(currentSectionDirection, sectionIndex);
+    }
+
+    int n0 = (int)baseSec.size[0];
+    int n1 = (int)baseSec.size[1];
+    vector<double> stitched((size_t)n0*n1);
+
+    for(int i=0; i<n0; ++i) {
+        double coord0 = baseSec.tran.transformAxis(0, i);   // in-plane hkl of this column
+        int side0 = (coord0 < 0) ? 0 : 1;
+        for(int j=0; j<n1; ++j) {
+            double coord1 = baseSec.tran.transformAxis(1, j);
+            int side1 = (coord1 < 0) ? 0 : 1;
+            int q = side0 + 2*side1;
+            DensityData* s = quadrantSource[q] ? quadrantSource[q] : base;
+            DensitySection& sec = secs.at(s);
+            // Look this hkl up in the source's own grid, so datasets with
+            // different limits/offsets still line up across the seam.
+            int si = (int)lround(sec.tran.transformAxisInv(0, coord0));
+            int sj = (int)lround(sec.tran.transformAxisInv(1, coord1));
+            double v;
+            if(si>=0 && sj>=0 && si<(int)sec.size[0] && sj<(int)sec.size[1])
+                v = sec.at(si,sj);
+            else
+                v = std::numeric_limits<double>::quiet_NaN();  // outside source's range
+            stitched[(size_t)i*n1 + j] = v;
+        }
+    }
+
+    return DensitySection(stitched, baseSec.size, baseSec.tran,
+                          currentSectionDirection, base->isDirect);
+}
+
+int DensityViewer::quadrantForHkl(const vector<double>& hkl) {
+    auto axes = sectionAxes(currentSectionDirection);  // in-plane axis indices
+    int side0 = (hkl[axes[0]] < 0) ? 0 : 1;
+    int side1 = (hkl[axes[1]] < 0) ? 0 : 1;
+    return side0 + 2*side1;
+}
+
+double DensityViewer::intensityAtHkl(const vector<double>& hkl) {
+    if(splitMode && !splitSources.isEmpty()) {
+        resolveQuadrants();
+        int q = quadrantForHkl(hkl);
+        DensityData* s = quadrantSource[q] ? quadrantSource[q] : &data;
+        return s->atHKL(hkl);
+    }
+    return data.atHKL(hkl);
+}
+
+void DensityViewer::configureSplit(QVector<DensityData*> sources, QStringList labels,
+                                   QVector<double> saturations, QStringList colormapNames, SplitLayout layout) {
+    splitSources = sources;
+    splitLabels = labels;
+    splitSaturations = saturations;
+    splitColormapNames = colormapNames;
+    splitLayout = layout;
+    splitMode = !sources.isEmpty();
+    if(splitMode) {
+        // Borrow the first source as the "primary" dataset so axes names, axis
+        // limits and the section combo keep working through the normal paths.
+        data = *sources[0];
+        dataIsInitialised = true;
+        resolveQuadrants();
+        updateSection();
+    }
+}
+
+void DensityViewer::clearSplit() {
+    splitMode = false;
+    splitSources.clear();
+    splitLabels.clear();
+    for(int i=0;i<4;++i) quadrantSource[i]=nullptr;
 }
 
