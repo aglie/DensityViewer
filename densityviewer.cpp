@@ -447,6 +447,7 @@ void DensityViewer::paintEvent(QPaintEvent * /* event */)
                 int s0=q&1, s1=(q>>1)&1, idx=q;
                 if(splitLayout==SplitLayout::HalvesAxis0) idx=s0;
                 else if(splitLayout==SplitLayout::HalvesAxis1) idx=s1;
+                else if(n==2) idx=(s0==s1)?0:1;        // diagonal 2x2 quadrants
                 return max(0, min(idx, n-1));
             };
             auto mid=[&](int axis,int side){ double lo,hi; sideRange(axis,side,lo,hi); return (lo+hi)/2; };
@@ -517,6 +518,18 @@ QSize DensityViewer::sizeHint() const
     return QSize(600, 600);
 }
 
+void DensityViewer::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    // Refit the data to the new widget size. Home locally (signals blocked) so
+    // each panel fits its own size instead of broadcasting onto its siblings.
+    if(dataIsInitialised) {
+        bool was = blockSignals(true);
+        goHome();
+        blockSignals(was);
+    }
+}
+
 void DensityViewer::changeZoom(double factor) {
     zoom*=factor;
     update();
@@ -534,19 +547,31 @@ void DensityViewer::pan(int dx,int dy) { //panning in screen pixels
     emit viewChanged();
 }
 
-// Image-space (index) coordinate sitting under the centre of the plotting area.
-// Used to mirror the view onto sibling panels regardless of widget size.
-QPointF DensityViewer::viewCenterImg() {
-    return imageTransform().inverted().map(QPointF(plottingArea().center()));
+// Crystallographic (in-plane hkl) coordinate under the centre of the plot.
+// Syncing in hkl rather than pixel index keeps panels aligned even when the
+// datasets being compared have different limits / offsets / sizes.
+QPointF DensityViewer::viewCenterHkl() {
+    QPointF idx = imageTransform().inverted().map(QPointF(plottingArea().center()));
+    double h0 = currentSection.tran.transformAxis(0,0) + idx.x()*currentSection.tran.stepSizes[0];
+    double h1 = currentSection.tran.transformAxis(1,0) + idx.y()*currentSection.tran.stepSizes[1];
+    return QPointF(h0, h1);
 }
 
-// Apply a view broadcast from another panel: match the zoom and slide so that
-// imgCenter lands under the plot centre. Reuses pan() for the index->screen math.
-void DensityViewer::setViewState(QPointF imgCenter, double zoomFactor) {
+// Apply a view broadcast from another panel: match the zoom and slide so the
+// given hkl coordinate sits under this panel's plot centre. Solved directly in
+// double precision (no screen-space int rounding) so it is exact at any zoom.
+void DensityViewer::setViewState(QPointF hklCenter, double zoomFactor) {
     zoom = zoomFactor;
-    QPointF cur = imageTransform().map(imgCenter);
-    QPointF want = plottingArea().center();
-    pan(qRound(want.x()-cur.x()), qRound(want.y()-cur.y()));
+    // hkl -> this panel's own fractional pixel index (uses this grid's limits/step)
+    double ix = (hklCenter.x() - currentSection.tran.transformAxis(0,0)) / currentSection.tran.stepSizes[0];
+    double iy = (hklCenter.y() - currentSection.tran.transformAxis(1,0)) / currentSection.tran.stepSizes[1];
+    // Choose x_pos,y_pos so image index (ix,iy) maps to the plot centre.
+    x_pos = 0; y_pos = 0;
+    QTransform rest = imageTransform();            // transform with no leading pan
+    QPointF mapped = rest.inverted().map(QPointF(plottingArea().center()));
+    x_pos = mapped.x() - ix;
+    y_pos = mapped.y() - iy;
+    update();
 }
 
 void DensityViewer::setActive(bool a) {
@@ -686,13 +711,36 @@ void DensityViewer::goHome() {
 }
 
 void DensityViewer::pixelateSection() {
-    sectionImage = QImage(currentSection.size[0], currentSection.size[1], QImage::Format_RGB32);
+    int n0 = currentSection.size[0], n1 = currentSection.size[1];
+    sectionImage = QImage(n0, n1, QImage::Format_RGB32);
 
-    for(int i=0; i<currentSection.size[0]; ++i)
-        for(int j=0; j<currentSection.size[1]; ++j) {
-            auto v = currentSection.at(i,j);
-            sectionImage.setPixel(i, j, falseColor(v, colormap, {-colorSaturation,colorSaturation}, ColormapInterpolation::nearest));
+    if(splitMode && !splitSources.isEmpty()) {
+        // Colour each region with its own dataset's saturation and colormap so
+        // datasets with different exposures can be compared in one split image.
+        resolveQuadrants();
+        for(int i=0;i<n0;++i) {
+            int side0 = (currentSection.tran.transformAxis(0,i) < 0) ? 0 : 1;
+            for(int j=0;j<n1;++j) {
+                int side1 = (currentSection.tran.transformAxis(1,j) < 0) ? 0 : 1;
+                int idx = quadrantSourceIdx[side0 + 2*side1];
+                double sat = (idx>=0 && idx<splitSaturations.size()) ? splitSaturations[idx] : colorSaturation;
+                Colormap cm = colormap;
+                if(idx>=0 && idx<splitColormapNames.size()) {
+                    auto it = Colormap::AvailableColormaps.find(splitColormapNames[idx].toStdString());
+                    if(it != Colormap::AvailableColormaps.end())
+                        cm = it->second;
+                }
+                auto v = currentSection.at(i,j);
+                sectionImage.setPixel(i, j, falseColor(v, cm, {-sat,sat}, ColormapInterpolation::nearest));
+            }
         }
+    } else {
+        for(int i=0; i<n0; ++i)
+            for(int j=0; j<n1; ++j) {
+                auto v = currentSection.at(i,j);
+                sectionImage.setPixel(i, j, falseColor(v, colormap, {-colorSaturation,colorSaturation}, ColormapInterpolation::nearest));
+            }
+    }
     update();
 }
 
@@ -730,29 +778,38 @@ void DensityViewer::updateDataset(QString filename) {
 }
 
 // ---------------------------------------------------------------------------
-// Symmetry-aware split: stitch up to four datasets into one section, divided at
-// the in-plane mirror lines (axis0 = 0 and axis1 = 0). In m-3m the principal
-// planes (h=0, k=0, l=0) are all {100} mirrors, so a matching pair joins
+// Split / quadrant view: stitch up to four datasets into one section, divided
+// at the in-plane mirror lines (axis0 = 0 and axis1 = 0, e.g. h=0/k=0). For
+// suitably symmetric data these are mirror planes, so a matching pair joins
 // seamlessly and any disagreement shows up as a discontinuity at the seam.
 // ---------------------------------------------------------------------------
 
 void DensityViewer::resolveQuadrants() {
     int n = splitSources.size();
-    if(n==0) { for(int i=0;i<4;++i) quadrantSource[i]=nullptr; return; }
+    for(int q=0;q<4;++q) { quadrantSource[q]=nullptr; quadrantSourceIdx[q]=-1; }
+    if(n==0) return;
     // quadrant index q = side0 + 2*side1, side = (coord < 0 ? 0 : 1)
-    auto src = [&](int i){ return splitSources[ qBound(0, i, n-1) ]; };
+    int idx[4] = {0,0,0,0};
     switch(splitLayout) {
     case SplitLayout::HalvesAxis0:                 // split at axis0 = 0 only
-        quadrantSource[0]=src(0); quadrantSource[2]=src(0);
-        quadrantSource[1]=src(1); quadrantSource[3]=src(1);
+        idx[0]=0; idx[2]=0; idx[1]=1; idx[3]=1;
         break;
     case SplitLayout::HalvesAxis1:                 // split at axis1 = 0 only
-        quadrantSource[0]=src(0); quadrantSource[1]=src(0);
-        quadrantSource[2]=src(1); quadrantSource[3]=src(1);
+        idx[0]=0; idx[1]=0; idx[2]=1; idx[3]=1;
         break;
     case SplitLayout::Quadrants:
-        for(int q=0;q<4;++q) quadrantSource[q]=src(q);
+        if(n==2) {
+            // True 2x2 with two datasets: A on the (--)/(++) diagonal, B on (-+)/(+-).
+            idx[0]=0; idx[3]=0; idx[1]=1; idx[2]=1;
+        } else {
+            idx[0]=0; idx[1]=1; idx[2]=2; idx[3]=3;
+        }
         break;
+    }
+    for(int q=0;q<4;++q) {
+        int i = qBound(0, idx[q], n-1);
+        quadrantSourceIdx[q] = i;
+        quadrantSource[q] = splitSources[i];
     }
 }
 
@@ -776,17 +833,23 @@ DensitySection DensityViewer::buildSplitSection() {
     vector<double> stitched((size_t)n0*n1);
 
     for(int i=0; i<n0; ++i) {
-        int side0 = (baseSec.tran.transformAxis(0, i) < 0) ? 0 : 1;
+        double coord0 = baseSec.tran.transformAxis(0, i);   // in-plane hkl of this column
+        int side0 = (coord0 < 0) ? 0 : 1;
         for(int j=0; j<n1; ++j) {
-            int side1 = (baseSec.tran.transformAxis(1, j) < 0) ? 0 : 1;
+            double coord1 = baseSec.tran.transformAxis(1, j);
+            int side1 = (coord1 < 0) ? 0 : 1;
             int q = side0 + 2*side1;
             DensityData* s = quadrantSource[q] ? quadrantSource[q] : base;
             DensitySection& sec = secs.at(s);
+            // Look this hkl up in the source's own grid, so datasets with
+            // different limits/offsets still line up across the seam.
+            int si = (int)lround(sec.tran.transformAxisInv(0, coord0));
+            int sj = (int)lround(sec.tran.transformAxisInv(1, coord1));
             double v;
-            if((int)sec.size[0]==n0 && (int)sec.size[1]==n1)
-                v = sec.at(i,j);
+            if(si>=0 && sj>=0 && si<(int)sec.size[0] && sj<(int)sec.size[1])
+                v = sec.at(si,sj);
             else
-                v = std::numeric_limits<double>::quiet_NaN();  // grid mismatch
+                v = std::numeric_limits<double>::quiet_NaN();  // outside source's range
             stitched[(size_t)i*n1 + j] = v;
         }
     }
@@ -812,9 +875,12 @@ double DensityViewer::intensityAtHkl(const vector<double>& hkl) {
     return data.atHKL(hkl);
 }
 
-void DensityViewer::configureSplit(QVector<DensityData*> sources, QStringList labels, SplitLayout layout) {
+void DensityViewer::configureSplit(QVector<DensityData*> sources, QStringList labels,
+                                   QVector<double> saturations, QStringList colormapNames, SplitLayout layout) {
     splitSources = sources;
     splitLabels = labels;
+    splitSaturations = saturations;
+    splitColormapNames = colormapNames;
     splitLayout = layout;
     splitMode = !sources.isEmpty();
     if(splitMode) {

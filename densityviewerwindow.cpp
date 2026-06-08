@@ -126,7 +126,7 @@ void DensityViewerWindow::applyToTargets(const std::function<void(DensityViewer*
 void DensityViewerWindow::broadcastView(DensityViewer* source) {
     if(!source->hasData())
         return;
-    QPointF c = source->viewCenterImg();
+    QPointF c = source->viewCenterHkl();
     double z = source->viewZoom();
     for(auto v : syncTargets()) {
         if(v==source || !v->hasData())
@@ -136,11 +136,12 @@ void DensityViewerWindow::broadcastView(DensityViewer* source) {
     }
 }
 
-// Show a crosshair at the hovered hkl in every panel and refresh the readout.
-void DensityViewerWindow::broadcastCursor(const vector<double>& hkl) {
+// Show a crosshair at the hovered hkl in the OTHER panels and refresh the readout.
+// The hovered (source) panel already has the live OS cursor, so skip it.
+void DensityViewerWindow::broadcastCursor(const vector<double>& hkl, DensityViewer* source) {
     for(auto v : syncTargets())
         if(v->hasData())
-            v->setCursorMarker(hkl, true);
+            v->setCursorMarker(hkl, v != source);
     updateCursorReadout(hkl);
 }
 
@@ -171,6 +172,48 @@ void DensityViewerWindow::updateCursorReadout(const vector<double>& hkl) {
     coordinateCursor->setText(QString::fromStdString(res.str()));
 }
 
+// Show either the single shared saturation control (scales linked) or one
+// saturation control per panel (scales unlinked, >=2 panels) so different
+// exposures can be tuned independently.
+void DensityViewerWindow::rebuildSaturationControls() {
+    bool perPanel = !linkScalesCheck->isChecked() && panels.size()>=2;
+    masterSatRow->setVisible(!perPanel);
+    perPanelSatBox->setVisible(perPanel);
+
+    auto lay = static_cast<QVBoxLayout*>(perPanelSatBox->layout());
+    QLayoutItem* item;
+    while((item = lay->takeAt(0)) != nullptr) {
+        if(item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
+    if(!perPanel)
+        return;
+
+    for(int i=0;i<panels.size();++i) {
+        DensityViewer* p = panels[i];
+        QString nm = QFileInfo(p->property("file").toString()).fileName();
+        if(nm.isEmpty())
+            nm = QString("Panel %1").arg(i+1);
+        auto lbl = new QLabel(QString("Saturation — %1").arg(nm));
+        lbl->setStyleSheet("color:#a0a0a0; font-size:11px;");
+        lbl->setToolTip(nm);
+        auto spin = new QDoubleSpinBox;
+        spin->setMaximum(INFINITY);
+        spin->setMinimum(0);
+        spin->setDecimals(4);
+        spin->setSingleStep(1);
+        spin->setValue(p->hasData() ? p->colorSaturationValue() : 100);
+        spin->setEnabled(p->hasData());
+        spin->setButtonSymbols(QAbstractSpinBox::NoButtons);
+        spin->installEventFilter(this);
+        connect(spin, static_cast<void(QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+                [this,p](double val){ if(p->hasData()){ p->setColorSaturation(val); if(splitView) rebuildSplit(); } });
+        lay->addWidget(lbl);
+        lay->addWidget(spin);
+    }
+}
+
 // Align a freshly-loaded panel with the shared controls and the group's view.
 void DensityViewerWindow::configureLoadedPanel(DensityViewer* v) {
     QSignalBlocker b(v);
@@ -185,7 +228,7 @@ void DensityViewerWindow::configureLoadedPanel(DensityViewer* v) {
     v->setInteractionMode(currentTool);
     for(auto p : panels) {
         if(p!=v && p->hasData()) {
-            v->setViewState(p->viewCenterImg(), p->viewZoom());
+            v->setViewState(p->viewCenterHkl(), p->viewZoom());
             break;
         }
     }
@@ -208,6 +251,9 @@ void DensityViewerWindow::setActivePanel(DensityViewer* v) {
             colormapComboBox->setCurrentIndex(idx);
     }
     removePanelBtn->setEnabled(panels.size()>1);
+    // Keep the section-index range matched to the focused panel's data.
+    if(v->hasData())
+        setXLimits();
 }
 
 DensityViewer* DensityViewerWindow::createPanel() {
@@ -216,8 +262,25 @@ DensityViewer* DensityViewerWindow::createPanel() {
     connect(v, &DensityViewer::viewChanged,    this, [this,v](){ broadcastView(v); });
     connect(v, &DensityViewer::changedSectionDirection, this, &DensityViewerWindow::setXLimits);
     connect(v, &DensityViewer::dataCursorMoved, this,
-            [this](int, int, vector<double> hkl, string){ broadcastCursor(hkl); });
+            [this,v](int, int, vector<double> hkl, string){ broadcastCursor(hkl, v); });
     return v;
+}
+
+// Place the panels into the 2x2 grid: first two in the top row, next two below.
+void DensityViewerWindow::relayoutPanels() {
+    for(int i=0;i<panels.size();++i) {
+        QSplitter* row = (i<2) ? topRow : bottomRow;
+        row->addWidget(panels[i]);     // reparents into the right row, in order
+    }
+    bottomRow->setVisible(panels.size() > 2);
+    auto equalize = [](QSplitter* s){
+        if(s->count()<=0) return;
+        QList<int> sizes; for(int i=0;i<s->count();++i) sizes<<1; s->setSizes(sizes);
+    };
+    equalize(topRow);
+    equalize(bottomRow);
+    if(panels.size()>2)
+        viewerSplitter->setSizes({1,1});
 }
 
 void DensityViewerWindow::addPanel() {
@@ -225,13 +288,10 @@ void DensityViewerWindow::addPanel() {
         return;
     auto v = createPanel();
     panels << v;
-    viewerSplitter->addWidget(v);
+    relayoutPanels();
     setActivePanel(v);
-    QList<int> sizes;
-    for(int i=0;i<panels.size();++i)
-        sizes << 1;
-    viewerSplitter->setSizes(sizes);
     removePanelBtn->setEnabled(panels.size()>1);
+    rebuildSaturationControls();
 }
 
 void DensityViewerWindow::removeActivePanel() {
@@ -239,9 +299,12 @@ void DensityViewerWindow::removeActivePanel() {
         return;
     auto v = activePanel;
     panels.removeOne(v);
+    v->setParent(nullptr);
     v->deleteLater();
+    relayoutPanels();
     setActivePanel(panels.first());
     removePanelBtn->setEnabled(panels.size()>1);
+    rebuildSaturationControls();
     if(splitView) {
         int loaded=0;
         for(auto p:panels) if(p->hasData()) loaded++;
@@ -256,12 +319,16 @@ void DensityViewerWindow::rebuildSplit() {
     QSignalBlocker b(splitViewer);
     QVector<DensityData*> sources;
     QStringList labels;
+    QVector<double> saturations;
+    QStringList colormaps;
     for(auto p : panels) {
         if(!p->hasData())
             continue;
         sources << &p->data;
         QString nm = QFileInfo(p->property("file").toString()).fileName();
         labels << (nm.isEmpty() ? QString("panel %1").arg(sources.size()) : nm);
+        saturations << p->colorSaturationValue();    // each region keeps its own scale
+        colormaps << p->colormapName();
     }
     if(sources.isEmpty())
         return;
@@ -271,12 +338,10 @@ void DensityViewerWindow::rebuildSplit() {
     if(li==0)      layout = SplitLayout::HalvesAxis0;
     else if(li==1) layout = SplitLayout::HalvesAxis1;
 
-    splitViewer->configureSplit(sources, labels, layout);
+    splitViewer->configureSplit(sources, labels, saturations, colormaps, layout);
     if(sectionComboBox->count()>0)
         splitViewer->setSectionDirection(sectionComboBox->currentText());
     splitViewer->setSectionIndex(sectionIndex->value());
-    splitViewer->setColormap(colormapComboBox->currentText());
-    splitViewer->setColorSaturation(colorSaturation->value());
     splitViewer->setGrid(gridCheck->isChecked());
     splitViewer->setInteractionMode(currentTool);
 }
@@ -307,14 +372,14 @@ void DensityViewerWindow::setSplitView(bool on) {
     viewerSplitter->setVisible(!on);
     splitViewer->setVisible(on);
     splitLayoutCombo->setEnabled(on);
-    splitToggleBtn->setText(on ? "Split view: m3m (on)" : "Split view (m3m)");
+    splitToggleBtn->setText(on ? "Split (on)" : "Split");
 
     // Carry the current pan/zoom across the switch.
     if(on) {
         for(auto p:panels)
             if(p->hasData()) {
                 QSignalBlocker bl(splitViewer);
-                splitViewer->setViewState(p->viewCenterImg(), p->viewZoom());
+                splitViewer->setViewState(p->viewCenterHkl(), p->viewZoom());
                 break;
             }
     } else if(activePanel && activePanel->hasData()) {
@@ -400,14 +465,26 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     viewerAreaLayout->setContentsMargins(0,0,0,0);
     viewerAreaLayout->setSpacing(0);
 
-    viewerSplitter = new QSplitter(Qt::Horizontal);
+    // Panels are arranged in a 2x2 grid: an outer vertical splitter holding two
+    // horizontal rows. Panels 1-2 go in the top row, 3-4 in the row below.
+    QString splitterStyle = "QSplitter::handle { background: #3c3c40; }";
+    viewerSplitter = new QSplitter(Qt::Vertical);
     viewerSplitter->setHandleWidth(2);
-    viewerSplitter->setStyleSheet("QSplitter::handle { background: #3c3c40; }");
+    viewerSplitter->setStyleSheet(splitterStyle);
+    topRow = new QSplitter(Qt::Horizontal);
+    topRow->setHandleWidth(2);
+    topRow->setStyleSheet(splitterStyle);
+    bottomRow = new QSplitter(Qt::Horizontal);
+    bottomRow->setHandleWidth(2);
+    bottomRow->setStyleSheet(splitterStyle);
+    viewerSplitter->addWidget(topRow);
+    viewerSplitter->addWidget(bottomRow);
+    bottomRow->setVisible(false);
     viewerAreaLayout->addWidget(viewerSplitter, 1);
 
     auto firstPanel = createPanel();
     panels << firstPanel;
-    viewerSplitter->addWidget(firstPanel);
+    topRow->addWidget(firstPanel);
     activePanel = firstPanel;
 
     splitViewer = new DensityViewer;
@@ -415,7 +492,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     connect(splitViewer, &DensityViewer::viewChanged, this, [this](){ broadcastView(splitViewer); });
     connect(splitViewer, &DensityViewer::changedSectionDirection, this, &DensityViewerWindow::setXLimits);
     connect(splitViewer, &DensityViewer::dataCursorMoved, this,
-            [this](int, int, vector<double> hkl, string){ broadcastCursor(hkl); });
+            [this](int, int, vector<double> hkl, string){ broadcastCursor(hkl, splitViewer); });
     viewerAreaLayout->addWidget(splitViewer, 1);
 
     mainLayout->addWidget(viewerArea, 1);
@@ -478,9 +555,9 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     panelBtnRow->addWidget(removePanelBtn);
     controllerBar->addLayout(panelBtnRow);
 
-    splitToggleBtn = new QPushButton("Split view (m3m)");
+    splitToggleBtn = new QPushButton("Split");
     splitToggleBtn->setCheckable(true);
-    splitToggleBtn->setToolTip("Stitch the loaded datasets across the m3m mirror lines (h=0 / k=0)");
+    splitToggleBtn->setToolTip("Stitch the loaded datasets into halves/quadrants at the mirror lines (h=0 / k=0)");
     connect(splitToggleBtn, &QPushButton::clicked, [this](bool on){ setSplitView(on); });
     controllerBar->addWidget(splitToggleBtn);
 
@@ -506,6 +583,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
             { QSignalBlocker b(colorSaturation); colorSaturation->setValue(cs); }
             applyToTargets([=](DensityViewer*v){ v->setColormap(cm); v->setColorSaturation(cs); });
         }
+        rebuildSaturationControls();
     });
     controllerBar->addWidget(linkScalesCheck);
 
@@ -556,7 +634,11 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     displayLabel->setStyleSheet("color: #d4d4d4; font-weight: bold; font-size: 12px; padding-bottom: 2px;");
     controllerBar->addWidget(displayLabel);
 
-    controllerBar->addWidget(new QLabel("Color saturation"));
+    masterSatRow = new QWidget;
+    auto masterSatLayout = new QVBoxLayout(masterSatRow);
+    masterSatLayout->setContentsMargins(0,0,0,0);
+    masterSatLayout->setSpacing(2);
+    masterSatLayout->addWidget(new QLabel("Color saturation"));
     colorSaturation = new QDoubleSpinBox;
     colorSaturation->setMaximum(INFINITY);
     colorSaturation->setMinimum(0);
@@ -572,6 +654,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
             applyToTargets([=](DensityViewer*v){ v->setColorSaturation(val); });
         else if(activePanel && activePanel->hasData())
             activePanel->setColorSaturation(val);
+        if(splitView) rebuildSplit();
     });
     auto csatRow = new QHBoxLayout;
     csatRow->setSpacing(2);
@@ -588,7 +671,16 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     csatBtns->addWidget(csatPlus);
     csatBtns->addWidget(csatMinus);
     csatRow->addLayout(csatBtns);
-    controllerBar->addLayout(csatRow);
+    masterSatLayout->addLayout(csatRow);
+    controllerBar->addWidget(masterSatRow);
+
+    // Per-panel saturation controls (shown when colour scales are unlinked)
+    perPanelSatBox = new QWidget;
+    auto perPanelSatLayout = new QVBoxLayout(perPanelSatBox);
+    perPanelSatLayout->setContentsMargins(0,0,0,0);
+    perPanelSatLayout->setSpacing(2);
+    perPanelSatBox->setVisible(false);
+    controllerBar->addWidget(perPanelSatBox);
 
     controllerBar->addWidget(new QLabel("Colormap"));
     colormapComboBox = new QComboBox;
@@ -596,12 +688,13 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     colormapComboBox->setFocusPolicy(Qt::ClickFocus);
     for (const auto& cmap : Colormap::AvailableColormaps )
         colormapComboBox->addItem(QString::fromStdString(cmap.first));
-    connect(colormapComboBox, static_cast<void(QComboBox::*)(const QString&)>(&QComboBox::activated),
+    connect(colormapComboBox, static_cast<void(QComboBox::*)(const QString&)>(&QComboBox::textActivated),
             [this](QString cmap){
         if(linkScalesCheck->isChecked())
             applyToTargets([=](DensityViewer*v){ v->setColormap(cmap); });
         else if(activePanel && activePanel->hasData())
             activePanel->setColormap(cmap);
+        if(splitView) rebuildSplit();
     });
     controllerBar->addWidget(colormapComboBox);
 
@@ -617,7 +710,7 @@ DensityViewerWindow::DensityViewerWindow(QWidget *parent) :
     sectionComboBox->setEnabled(false);
     sectionComboBox->setFocusPolicy(Qt::ClickFocus);
     connect(sectionComboBox,
-            static_cast<void (QComboBox::*)(const QString &)>(&QComboBox::activated),
+            static_cast<void (QComboBox::*)(const QString &)>(&QComboBox::textActivated),
             [this](QString sec){
         applyToTargets([=](DensityViewer*v){ QSignalBlocker b(v); v->setSectionDirection(sec); });
         setXLimits();
@@ -819,6 +912,7 @@ void DensityViewerWindow::onPanelLoaded(DensityViewer* v, const QString& path) {
     configureLoadedPanel(v);
     updateProgramTitle();
     addToRecentFiles(path);
+    rebuildSaturationControls();
 
     if(splitView)
         rebuildSplit();

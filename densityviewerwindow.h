@@ -51,8 +51,10 @@ private:
     // -- Comparison panels --
     QList<DensityViewer*> panels;   // side-by-side dataset views (own the data)
     DensityViewer* activePanel;     // focused panel (target of per-panel actions)
-    DensityViewer* splitViewer;     // composite m3m split view (own widget)
-    QSplitter* viewerSplitter;      // holds the side-by-side panels
+    DensityViewer* splitViewer;     // composite split/quadrant view (own widget)
+    QSplitter* viewerSplitter;      // outer vertical splitter (stacks the two rows)
+    QSplitter* topRow;              // panels 1-2
+    QSplitter* bottomRow;           // panels 3-4
     QWidget* viewerArea;            // wraps splitter + splitViewer, toggles visibility
     bool splitView;                 // true when the composite split is shown
     DensityViewerInteractionMode currentTool;
@@ -63,10 +65,12 @@ private:
     QList<DensityViewer*> syncTargets();                 // viewers that should stay locked
     void applyToTargets(const std::function<void(DensityViewer*)>& fn);
     void broadcastView(DensityViewer* source);
-    void broadcastCursor(const vector<double>& hkl);
+    void broadcastCursor(const vector<double>& hkl, DensityViewer* source);
+    void rebuildSaturationControls();
     void configureLoadedPanel(DensityViewer* v);
     void addPanel();
     void removeActivePanel();
+    void relayoutPanels();
     void setSplitView(bool on);
     void rebuildSplit();
     void updateCursorReadout(const vector<double>& hkl);
@@ -76,6 +80,8 @@ private:
     QDoubleSpinBox* sectionIndex;
     QDoubleSpinBox* colorSaturation;
     QComboBox* colormapComboBox;
+    QWidget* masterSatRow;      // single shared saturation control (scales linked)
+    QWidget* perPanelSatBox;    // one saturation control per panel (scales unlinked)
     QCheckBox* gridCheck;
     QCheckBox* linkScalesCheck;
     QComboBox* splitLayoutCombo;

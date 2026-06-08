@@ -81,9 +81,10 @@ public:
 
 enum class DensityViewerInteractionMode {nothing, pan, zoom};
 
-// How a split (symmetry-aware) panel stitches several datasets together.
-// In m-3m the in-plane principal planes (axis0=0 and axis1=0, e.g. h=0/k=0) are
-// all {100} mirrors, so juxtaposing datasets across them is a meaningful test.
+// How a split panel stitches several datasets together. The in-plane axes'
+// zero crossings (axis0=0 and axis1=0, e.g. h=0/k=0) are symmetry mirror lines
+// for suitably symmetric data, so juxtaposing datasets across them is a
+// meaningful agreement test.
 enum class SplitLayout {HalvesAxis0, HalvesAxis1, Quadrants};
 
 class DensityViewer : public QWidget
@@ -107,7 +108,7 @@ public:
 
     // -- Synchronisation accessors (used to lock views together) --
     double viewZoom() const {return zoom;}
-    QPointF viewCenterImg();                 // image-space point under the plot centre
+    QPointF viewCenterHkl();                  // in-plane hkl coordinate under the plot centre
     double colorSaturationValue() const {return colorSaturation;}
     QString colormapName() const {return currentColormapName;}
     bool hasData() const {return dataIsInitialised;}
@@ -115,7 +116,8 @@ public:
     double intensityAtHkl(const vector<double>& hkl);  // split-aware value lookup
 
     // -- Symmetry-aware split --
-    void configureSplit(QVector<DensityData*> sources, QStringList labels, SplitLayout layout);
+    void configureSplit(QVector<DensityData*> sources, QStringList labels,
+                        QVector<double> saturations, QStringList colormapNames, SplitLayout layout);
     void clearSplit();
 
 public slots:
@@ -178,13 +180,17 @@ private:
     SplitLayout splitLayout;
     QVector<DensityData*> splitSources;   // datasets feeding the split (1..4)
     QStringList splitLabels;              // filenames for in-panel annotation
+    QVector<double> splitSaturations;     // per-source colour saturation
+    QStringList splitColormapNames;       // per-source colormap name
     DensityData* quadrantSource[4];       // resolved dataset per quadrant
+    int quadrantSourceIdx[4];             // resolved source index per quadrant
     void resolveQuadrants();
     DensitySection buildSplitSection();
     int quadrantForHkl(const vector<double>& hkl);
 
 protected:
     void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE;
+    void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
 
     // Here I will need some variables to Pan/Zoom go to plane (later) Periodically repeat (later)
     // Function screen_pix -> hkl index
